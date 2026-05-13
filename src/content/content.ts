@@ -124,32 +124,36 @@ const POPUP_CSS = `
 .lp-word { font-size: 18px; font-weight: 700; color: #240029; }
 .lp-pos { font-size: 12px; color: #6d526d; text-transform: lowercase; background: #f5f0f5; padding: 2px 8px; border-radius: 10px; }
 .lp-pronunciation { font-size: 13px; color: #6d526d; margin-bottom: 8px; font-style: italic; }
-.lp-main-translation { font-size: 16px; font-weight: 600; color: #df37a7; margin-bottom: 8px; }
+.lp-result-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding-right: 20px; }
+.lp-main-translation { font-size: 16px; font-weight: 600; color: #df37a7; flex: 1; min-width: 0; }
+.lp-phrase-translation { font-size: 15px; color: #333; line-height: 1.6; flex: 1; min-width: 0; }
+.lp-icon-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.lp-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d4ccd4;
+  border-radius: 10px;
+  background: #fff;
+  color: #240029;
+  cursor: pointer;
+  transition: all .15s;
+  padding: 0;
+}
+.lp-icon-btn svg { width: 16px; height: 16px; fill: currentColor; }
+.lp-icon-btn:hover { background: #f8f0f8; border-color: #c4bcc4; transform: translateY(-1px); }
+.lp-icon-btn:active { transform: translateY(0); }
+.lp-icon-btn.is-copied { background: #ecfdf3; border-color: #86efac; color: #166534; }
 .lp-alternatives { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .lp-alt { background: #f8f0f8; color: #6d526d; padding: 3px 10px; border-radius: 12px; font-size: 12px; border: 1px solid #ece5ec; }
 .lp-examples { margin-bottom: 12px; }
 .lp-example { padding: 8px 10px; background: #faf8fa; border-radius: 8px; margin-bottom: 6px; font-size: 13px; border-left: 3px solid #df37a7; }
 .lp-example div:first-child { color: #333; margin-bottom: 2px; }
 .lp-example div:last-child { color: #6d526d; }
-.lp-actions { display: flex; gap: 8px; }
-.lp-btn {
-  flex: 1;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid #d4ccd4;
-  background: #fff;
-  color: #240029;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all .15s;
-  font-family: inherit;
-}
-.lp-btn:hover { background: #f8f0f8; border-color: #c4bcc4; }
-.lp-btn-speak { background: #240029; color: #fff; border-color: #240029; }
-.lp-btn-speak:hover { background: #3d0045; }
+.lp-actions { display: none; }
 .lp-error { color: #ef4444; font-size: 14px; padding: 8px 0; }
-.lp-phrase-translation { font-size: 15px; color: #333; line-height: 1.6; margin-bottom: 12px; padding-right: 20px; }
 .lp-divider { height: 1px; background: #ece5ec; margin: 10px 0; }
 `;
 
@@ -158,6 +162,15 @@ let currentFab: HTMLElement | null = null;
 let isTranslatingPage = false;
 const originalTexts = new WeakMap<Text, string>();
 const translatedNodes = new WeakSet<Text>();
+
+const ICONS = {
+  translate:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12.87 15.07 11 13.2a4.7 4.7 0 0 0 .95-2.2h2.39v-2H7v2h2.86A6.7 6.7 0 0 1 7 15.3l1.4 1.4a8.7 8.7 0 0 0 3.18-2.53l1.7 1.7.59-1.8ZM17.5 10h-2l-4.5 12h2l1.12-3h4.76L20 22h2l-4.5-12Zm-2.56 7 1.44-4.33L17.82 17h-2.88Z"/></svg>',
+  speak:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3 10v4h4l5 4V6L7 10H3Zm13.5 2a3.5 3.5 0 0 0-2.5-3.35v6.69A3.5 3.5 0 0 0 16.5 12Zm0-7.5v2.06A7 7 0 0 1 21 12a7 7 0 0 1-4.5 5.44v2.06A9 9 0 0 0 23 12a9 9 0 0 0-6.5-7.5Z"/></svg>',
+  copy:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>',
+} as const;
 
 function createHost(): HTMLElement {
   const host = document.createElement("div");
@@ -325,12 +338,54 @@ function attachPopupListeners(popup: HTMLElement) {
   });
 }
 
+function attachPopupIconListeners(popup: HTMLElement) {
+  popup.querySelectorAll(".lp-close-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hidePopup();
+    });
+  });
+
+  popup.querySelectorAll(".lp-icon-speak").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const button = e.currentTarget as HTMLElement;
+      speak(
+        button.dataset.text || "",
+        (button.dataset.lang as "en" | "ru") || "unknown",
+      );
+    });
+  });
+
+  popup.querySelectorAll(".lp-icon-copy").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const button = e.currentTarget as HTMLElement;
+      const text = button.dataset.text || "";
+      navigator.clipboard.writeText(text).then(() => {
+        button.classList.add("is-copied");
+        button.setAttribute("title", "Copied");
+        setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("title", "Copy");
+        }, 1200);
+      });
+    });
+  });
+}
+
 function renderWordResult(
   popup: HTMLElement,
   result: WordTranslationResult,
   originalText: string,
 ) {
   const lang = result.detectedLanguage === "ru" ? "ru" : "en";
+  const actionButtons = `
+    <div class="lp-icon-actions">
+      <button class="lp-icon-btn lp-icon-speak" type="button" title="Speak" data-text="${escapeHtml(originalText)}" data-lang="${lang}">${ICONS.speak}</button>
+      <button class="lp-icon-btn lp-icon-copy" type="button" title="Copy" data-text="${escapeHtml(result.mainTranslation)}">${ICONS.copy}</button>
+    </div>
+  `;
 
   let html = `
     <button class="lp-close-btn" title="Закрыть">×</button>
@@ -342,7 +397,12 @@ function renderWordResult(
   if (result.pronunciation) {
     html += `<div class="lp-pronunciation">${escapeHtml(result.pronunciation)}</div>`;
   }
-  html += `<div class="lp-main-translation">${escapeHtml(result.mainTranslation)}</div>`;
+  html += `
+    <div class="lp-result-header">
+      <div class="lp-main-translation">${escapeHtml(result.mainTranslation)}</div>
+      ${actionButtons}
+    </div>
+  `;
 
   if (result.alternatives && result.alternatives.length > 0) {
     html += `<div class="lp-alternatives">${result.alternatives.map((a) => `<span class="lp-alt">${escapeHtml(a)}</span>`).join("")}</div>`;
@@ -365,6 +425,7 @@ function renderWordResult(
 
   popup.innerHTML = html;
   attachPopupListeners(popup);
+  attachPopupIconListeners(popup);
 }
 
 function renderPhraseResult(
@@ -376,7 +437,13 @@ function renderPhraseResult(
 
   popup.innerHTML = `
     <button class="lp-close-btn" title="Закрыть">×</button>
-    <div class="lp-phrase-translation">${escapeHtml(result.translation)}</div>
+    <div class="lp-result-header">
+      <div class="lp-phrase-translation">${escapeHtml(result.translation)}</div>
+      <div class="lp-icon-actions">
+        <button class="lp-icon-btn lp-icon-speak" type="button" title="Speak" data-text="${escapeHtml(originalText)}" data-lang="${lang}">${ICONS.speak}</button>
+        <button class="lp-icon-btn lp-icon-copy" type="button" title="Copy" data-text="${escapeHtml(result.translation)}">${ICONS.copy}</button>
+      </div>
+    </div>
     <div class="lp-actions">
       <button class="lp-btn lp-btn-speak" data-text="${escapeHtml(originalText)}" data-lang="${lang}">Озвучить</button>
       <button class="lp-btn lp-btn-copy" data-text="${escapeHtml(result.translation)}">Копировать</button>
@@ -384,6 +451,7 @@ function renderPhraseResult(
   `;
 
   attachPopupListeners(popup);
+  attachPopupIconListeners(popup);
 }
 
 function renderError(popup: HTMLElement, error: string) {
@@ -452,7 +520,28 @@ function showFab(selection: Selection, text: string) {
 
   const fab = document.createElement("button");
   fab.className = "lp-fab";
+  fab.style.cssText = `
+    position: absolute;
+    z-index: 2147483646;
+    background: #df37a7;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(223, 55, 167, 0.35);
+    transition: transform 0.1s, background 0.15s;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  `;
   fab.textContent = "Перевести";
+  fab.innerHTML = ICONS.translate;
+  fab.setAttribute("title", "Translate");
+  fab.setAttribute("aria-label", "Translate");
   fab.addEventListener("click", (e) => {
     e.stopPropagation();
     hideFab();
@@ -464,7 +553,7 @@ function showFab(selection: Selection, text: string) {
 
   const scrollX = window.scrollX || window.pageXOffset;
   const scrollY = window.scrollY || window.pageYOffset;
-  fab.style.left = `${Math.max(10, rect.right + scrollX - 80)}px`;
+  fab.style.left = `${Math.max(10, rect.right + scrollX - 42)}px`;
   fab.style.top = `${rect.bottom + scrollY + 8}px`;
 }
 
@@ -570,7 +659,20 @@ async function checkExcluded(): Promise<boolean> {
   }
 }
 
-document.addEventListener("mouseup", handleSelection);
+document.addEventListener("mouseup", (e) => {
+  const target = e.target as Node;
+  const host = document.getElementById("linguapop-host");
+  if (host && host.shadowRoot) {
+    const popup = host.shadowRoot.querySelector(".lp-popup");
+    if (popup && popup.contains(target)) {
+      return;
+    }
+  }
+  if (currentFab && currentFab.contains(target)) {
+    return;
+  }
+  handleSelection();
+});
 document.addEventListener("keyup", (e) => {
   if (
     e.key === "Shift" ||
