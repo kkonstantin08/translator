@@ -70,14 +70,20 @@ const POPUP_CSS = `
   border-radius: 14px;
   box-shadow: 0 8px 32px rgba(36,0,41,.18), 0 2px 8px rgba(36,0,41,.08);
   padding: 16px;
-  max-width: 340px;
-  max-height: 420px;
+  width: min(340px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: min(420px, calc(100vh - 24px));
   overflow-y: auto;
   color: #333;
   font-size: 14px;
   line-height: 1.5;
   border: 1px solid #e8e0e8;
   box-sizing: border-box;
+}
+.lp-popup-phrase {
+  width: min(560px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: min(540px, calc(100vh - 24px));
 }
 .lp-fab {
   position: absolute;
@@ -172,6 +178,57 @@ const ICONS = {
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>',
 } as const;
 
+type ExtensionResponse = {
+  success?: boolean;
+  result?: unknown;
+  error?: string;
+} | null;
+
+function hasExtensionContext(): boolean {
+  return typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
+}
+
+function safeSendMessage(
+  message: unknown,
+  onResponse: (response: ExtensionResponse) => void,
+): void {
+  if (!hasExtensionContext()) {
+    onResponse(null);
+    return;
+  }
+
+  try {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        onResponse(null);
+        return;
+      }
+      onResponse((response as ExtensionResponse) ?? null);
+    });
+  } catch {
+    onResponse(null);
+  }
+}
+
+function safeGetExcludedSites(onResult: (sites: string[]) => void): void {
+  if (!hasExtensionContext()) {
+    onResult([]);
+    return;
+  }
+
+  try {
+    chrome.storage.sync.get("excludedSites", (result) => {
+      if (chrome.runtime.lastError) {
+        onResult([]);
+        return;
+      }
+      onResult((result.excludedSites as string[]) || []);
+    });
+  } catch {
+    onResult([]);
+  }
+}
+
 function createHost(): HTMLElement {
   const host = document.createElement("div");
   host.id = "linguapop-host";
@@ -241,7 +298,13 @@ function positionPopup(
   let top: number;
 
   const popupRect = popup.getBoundingClientRect();
-  const popupWidth = Math.min(popupRect.width || 340, 340);
+  const fallbackWidth = popup.classList.contains("lp-popup-phrase")
+    ? 560
+    : 340;
+  const popupWidth = Math.min(
+    popupRect.width || fallbackWidth,
+    viewportWidth - 20,
+  );
   const popupHeight = popupRect.height || 200;
 
   if (position === "above") {
@@ -279,7 +342,7 @@ function makeDraggable(popup: HTMLElement) {
 
   popup.addEventListener("mousedown", (e) => {
     const target = e.target as HTMLElement;
-    if (target.closest(".lp-btn, .lp-close-btn")) return;
+    if (target.closest(".lp-btn, .lp-close-btn, .lp-icon-btn")) return;
     isDragging = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -460,6 +523,8 @@ function renderError(popup: HTMLElement, error: string) {
     invalid_api_key: "Неверный API ключ.",
     network_error: "Ошибка сети. Проверьте подключение.",
     rate_limit: "Превышен лимит запросов.",
+    extension_unavailable:
+      "Extension was reloaded. Refresh the page.",
     llm_disabled_no_fallback:
       "LLM отключён. Настройте fallback-переводчик в настройках.",
   };
@@ -485,7 +550,7 @@ function showWordPopup(selection: Selection, text: string) {
     positionPopup(popup, rect, "above");
   });
 
-  chrome.runtime.sendMessage(
+  safeSendMessage(
     { type: "TRANSLATE", data: { text, mode: "word" } },
     (response) => {
       const host = document.getElementById("linguapop-host");
@@ -495,7 +560,9 @@ function showWordPopup(selection: Selection, text: string) {
       ) as HTMLElement;
       if (!currentPopup) return;
 
-      if (response?.success) {
+      if (!response) {
+        renderError(currentPopup, "extension_unavailable");
+      } else if (response.success) {
         renderWordResult(
           currentPopup,
           response.result as WordTranslationResult,
@@ -566,11 +633,12 @@ function showPhrasePopup(selection: Selection, text: string) {
   const popup = createPopupInShadow();
   popup.innerHTML = `<div class="lp-loading"><div class="lp-spinner"></div>Перевод...</div>`;
 
+  popup.classList.add("lp-popup-phrase");
   requestAnimationFrame(() => {
     positionPopup(popup, rect, "below");
   });
 
-  chrome.runtime.sendMessage(
+  safeSendMessage(
     { type: "TRANSLATE", data: { text, mode: "phrase" } },
     (response) => {
       const host = document.getElementById("linguapop-host");
@@ -580,7 +648,11 @@ function showPhrasePopup(selection: Selection, text: string) {
       ) as HTMLElement;
       if (!currentPopup) return;
 
-      if (response?.success) {
+      currentPopup.classList.add("lp-popup-phrase");
+
+      if (!response) {
+        renderError(currentPopup, "extension_unavailable");
+      } else if (response.success) {
         renderPhraseResult(
           currentPopup,
           response.result as PhraseTranslationResult,
@@ -649,8 +721,7 @@ async function checkExcluded(): Promise<boolean> {
   try {
     const hostname = window.location.hostname;
     return new Promise((resolve) => {
-      chrome.storage.sync.get("excludedSites", (result) => {
-        const sites: string[] = (result.excludedSites as string[]) || [];
+      safeGetExcludedSites((sites) => {
         resolve(sites.some((site) => hostname.includes(site)));
       });
     });
@@ -756,7 +827,10 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       text.split(/\s+/).filter((w) => w.length > 0).length === 1
         ? "word"
         : "phrase";
-    chrome.runtime.sendMessage(
+    if (mode === "phrase") {
+      popup.classList.add("lp-popup-phrase");
+    }
+    safeSendMessage(
       { type: "TRANSLATE", data: { text, mode } },
       (response) => {
         const host = document.getElementById("linguapop-host");
@@ -766,7 +840,13 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
         ) as HTMLElement;
         if (!currentPopup) return;
 
-        if (response?.success) {
+        if (mode === "phrase") {
+          currentPopup.classList.add("lp-popup-phrase");
+        }
+
+        if (!response) {
+          renderError(currentPopup, "extension_unavailable");
+        } else if (response.success) {
           if (mode === "word") {
             renderWordResult(
               currentPopup,
@@ -904,7 +984,7 @@ function startPageTranslation() {
     const DELIMITER = "\n\u0001\n";
     const combined = texts.join(DELIMITER);
 
-    chrome.runtime.sendMessage(
+    safeSendMessage(
       { type: "TRANSLATE", data: { text: combined, mode: "phrase" } },
       (response) => {
         if (response?.success) {
