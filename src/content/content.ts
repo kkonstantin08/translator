@@ -284,17 +284,39 @@ function createPopupInShadow(): HTMLElement {
   return popup;
 }
 
+function getRangeAnchorRect(
+  range: Range,
+  anchor: "start" | "end" | "bounds" = "bounds",
+): DOMRect {
+  const rects = Array.from(range.getClientRects()).filter(
+    (rect) => rect.width > 0 && rect.height > 0,
+  );
+
+  if (rects.length === 0) {
+    return range.getBoundingClientRect();
+  }
+
+  if (anchor === "start") {
+    return rects[0];
+  }
+
+  if (anchor === "end") {
+    return rects[rects.length - 1];
+  }
+
+  return range.getBoundingClientRect();
+}
+
 function positionPopup(
   popup: HTMLElement,
   rect: DOMRect,
   position: "above" | "below",
 ) {
-  const scrollX = window.scrollX || window.pageXOffset;
-  const scrollY = window.scrollY || window.pageYOffset;
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
+  const gap = 12;
 
-  let left = rect.left + scrollX;
+  let left = rect.left;
   let top: number;
 
   const popupRect = popup.getBoundingClientRect();
@@ -308,23 +330,44 @@ function positionPopup(
   const popupHeight = popupRect.height || 200;
 
   if (position === "above") {
-    top = rect.top + scrollY - popupHeight - 10;
-    if (top < scrollY + 10) {
-      top = rect.bottom + scrollY + 10;
+    top = rect.top - popupHeight - gap;
+    if (top < 10) {
+      top = rect.bottom + gap;
     }
   } else {
-    top = rect.bottom + scrollY + 10;
-    if (top + popupHeight > scrollY + viewportHeight - 10) {
-      top = rect.top + scrollY - popupHeight - 10;
+    top = rect.bottom + gap;
+    if (top + popupHeight > viewportHeight - 10) {
+      top = rect.top - popupHeight - gap;
     }
   }
 
-  const maxLeft = scrollX + viewportWidth - popupWidth - 10;
+  const maxLeft = viewportWidth - popupWidth - 10;
   if (left > maxLeft) left = maxLeft;
-  if (left < scrollX + 10) left = scrollX + 10;
+  if (left < 10) left = 10;
+  if (top < 10) top = 10;
 
   popup.style.left = `${left}px`;
   popup.style.top = `${top}px`;
+}
+
+function eventHitsPopupOrFab(event: Event): boolean {
+  const host = document.getElementById("linguapop-host");
+  const popup = host?.shadowRoot?.querySelector(".lp-popup");
+  const target = event.target as Node | null;
+  const path =
+    typeof event.composedPath === "function" ? event.composedPath() : [];
+
+  if (popup) {
+    if (path.includes(popup)) return true;
+    if (target && popup.contains(target)) return true;
+  }
+
+  if (currentFab) {
+    if (path.includes(currentFab)) return true;
+    if (target && currentFab.contains(target)) return true;
+  }
+
+  return false;
 }
 
 function escapeHtml(text: string): string {
@@ -541,7 +584,7 @@ function showWordPopup(selection: Selection, text: string) {
   hidePopup();
 
   const range = selection.getRangeAt(0);
-  const rect = range.getBoundingClientRect();
+  const rect = getRangeAnchorRect(range, "bounds");
 
   const popup = createPopupInShadow();
   popup.innerHTML = `<div class="lp-loading"><div class="lp-spinner"></div>Перевод...</div>`;
@@ -583,7 +626,7 @@ function showFab(selection: Selection, text: string) {
   hideFab();
 
   const range = selection.getRangeAt(0);
-  const rect = range.getBoundingClientRect();
+  const rect = getRangeAnchorRect(range, "end");
 
   const fab = document.createElement("button");
   fab.className = "lp-fab";
@@ -628,7 +671,7 @@ function showPhrasePopup(selection: Selection, text: string) {
   hidePopup();
 
   const range = selection.getRangeAt(0);
-  const rect = range.getBoundingClientRect();
+  const rect = getRangeAnchorRect(range, "end");
 
   const popup = createPopupInShadow();
   popup.innerHTML = `<div class="lp-loading"><div class="lp-spinner"></div>Перевод...</div>`;
@@ -731,15 +774,7 @@ async function checkExcluded(): Promise<boolean> {
 }
 
 document.addEventListener("mouseup", (e) => {
-  const target = e.target as Node;
-  const host = document.getElementById("linguapop-host");
-  if (host && host.shadowRoot) {
-    const popup = host.shadowRoot.querySelector(".lp-popup");
-    if (popup && popup.contains(target)) {
-      return;
-    }
-  }
-  if (currentFab && currentFab.contains(target)) {
+  if (eventHitsPopupOrFab(e)) {
     return;
   }
   handleSelection();
@@ -756,15 +791,7 @@ document.addEventListener("keyup", (e) => {
 });
 
 document.addEventListener("mousedown", (e) => {
-  const target = e.target as Node;
-  const host = document.getElementById("linguapop-host");
-  if (host && host.shadowRoot) {
-    const popup = host.shadowRoot.querySelector(".lp-popup");
-    if (popup && popup.contains(target)) {
-      return;
-    }
-  }
-  if (currentFab && currentFab.contains(target)) {
+  if (eventHitsPopupOrFab(e)) {
     return;
   }
   hideAll();
@@ -818,10 +845,8 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     const popup = createPopupInShadow();
     popup.innerHTML = `<div class="lp-loading"><div class="lp-spinner"></div>Перевод...</div>`;
 
-    const scrollX = window.scrollX || window.pageXOffset;
-    const scrollY = window.scrollY || window.pageYOffset;
-    popup.style.left = `${scrollX + Math.max(10, window.innerWidth / 2 - 150)}px`;
-    popup.style.top = `${scrollY + Math.max(10, window.innerHeight / 2 - 100)}px`;
+    popup.style.left = `${Math.max(10, window.innerWidth / 2 - 150)}px`;
+    popup.style.top = `${Math.max(10, window.innerHeight / 2 - 100)}px`;
 
     const mode =
       text.split(/\s+/).filter((w) => w.length > 0).length === 1
