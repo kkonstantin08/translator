@@ -112,12 +112,27 @@ export default function OptionsApp() {
 
         <section>
           <h2>{UI_STRINGS.apiKeyLabel}</h2>
+          <div className="lp-help-text">
+            Получить API ключи можно в консоли Mistral (
+            <a
+              href="https://console.mistral.ai/api-keys/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              console.mistral.ai
+            </a>
+            ).
+            <br />
+            Можно указать несколько ключей (каждый с новой строки или через
+            запятую). Если лимит одного ключа исчерпан, расширение автоматически
+            перейдет к следующему.
+          </div>
           <div className="lp-key-row">
-            <input
-              type="password"
+            <textarea
               value={settings.mistralApiKey}
               onChange={(e) => updateSetting("mistralApiKey", e.target.value)}
-              placeholder="Вставьте API ключ Mistral..."
+              placeholder="Вставьте API ключи Mistral..."
+              rows={3}
             />
             <button
               onClick={handleCheckKey}

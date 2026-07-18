@@ -82,5 +82,27 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === "FETCH_TTS") {
+    const { url } = request;
+    fetch(url, { referrerPolicy: "no-referrer" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("TTS fetch failed");
+        const buffer = await res.arrayBuffer();
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        const dataUrl = `data:audio/mpeg;base64,${base64}`;
+        sendResponse({ success: true, dataUrl });
+      })
+      .catch((err) => {
+        console.error("[LinguaPop] TTS error:", err);
+        sendResponse({ success: false });
+      });
+    return true;
+  }
+
   return false;
 });

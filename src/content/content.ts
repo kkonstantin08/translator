@@ -3,55 +3,94 @@ import type {
   PhraseTranslationResult,
 } from "../shared/types";
 
-function ensureVoices(): Promise<SpeechSynthesisVoice[]> {
-  return new Promise((resolve) => {
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      resolve(voices);
-      return;
-    }
-    const handler = () => {
-      resolve(window.speechSynthesis.getVoices());
-      window.speechSynthesis.removeEventListener("voiceschanged", handler);
-    };
-    window.speechSynthesis.addEventListener("voiceschanged", handler);
-    setTimeout(() => {
-      resolve(window.speechSynthesis.getVoices());
-    }, 1000);
-  });
+let currentAudioContext: AudioContext | null = null;
+let currentAudioSource: AudioBufferSourceNode | null = null;
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = window.atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function stopSpeaking(): void {
+  if (currentAudioSource) {
+    try {
+      currentAudioSource.stop();
+    } catch (e) {}
+    currentAudioSource = null;
+  }
+  if (currentAudioContext) {
+    currentAudioContext.close().catch(() => {});
+    currentAudioContext = null;
+  }
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
 }
 
 async function speak(
   text: string,
   lang: "en" | "ru" | "unknown",
 ): Promise<void> {
+  stopSpeaking();
+
+  if (!text || lang === "unknown") return;
+
+  const safeText = text.slice(0, 200);
+  const targetLang = lang === "ru" ? "ru" : "en";
+  
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(
+    safeText,
+  )}&tl=${targetLang}&client=tw-ob`;
+
+  try {
+    const response = await new Promise<{ success: boolean; dataUrl?: string }>(
+      (resolve) => {
+        safeSendMessage(
+          { type: "FETCH_TTS", url },
+          (res) => resolve((res as any) || { success: false })
+        );
+      }
+    );
+
+    if (!response.success || !response.dataUrl) {
+      throw new Error("TTS fetch returned false");
+    }
+
+    const base64 = response.dataUrl.split(',')[1];
+    const arrayBuffer = base64ToArrayBuffer(base64);
+    
+    currentAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioBuffer = await currentAudioContext.decodeAudioData(arrayBuffer);
+    
+    currentAudioSource = currentAudioContext.createBufferSource();
+    currentAudioSource.buffer = audioBuffer;
+    currentAudioSource.connect(currentAudioContext.destination);
+    currentAudioSource.start();
+
+  } catch (error) {
+    console.warn("[LinguaPop] Audio playback failed:", error);
+    fallbackSpeak(text, targetLang);
+  }
+}
+
+function fallbackSpeak(text: string, lang: "en" | "ru"): void {
   if (!window.speechSynthesis) return;
-
-  window.speechSynthesis.cancel();
-
-  const voices = await ensureVoices();
   const utterance = new SpeechSynthesisUtterance(text);
+  const voices = window.speechSynthesis.getVoices();
+  
+  let preferredVoice = voices.find((v) => 
+    v.lang.startsWith(lang === "ru" ? "ru" : "en") && 
+    (v.name.includes("Google") || v.name.includes("Premium") || v.name.includes("Natural"))
+  ) || voices.find((v) => v.lang.startsWith(lang === "ru" ? "ru" : "en"));
 
-  let preferredVoice: SpeechSynthesisVoice | undefined;
-
-  if (lang === "ru") {
-    preferredVoice =
-      voices.find((voice) => voice.lang.startsWith("ru-RU")) ||
-      voices.find((voice) => voice.lang.startsWith("ru"));
-  } else if (lang === "en") {
-    preferredVoice =
-      voices.find((voice) => voice.lang.startsWith("en-US")) ||
-      voices.find((voice) => voice.lang.startsWith("en-GB")) ||
-      voices.find((voice) => voice.lang.startsWith("en"));
-  }
-
-  if (preferredVoice) {
-    utterance.voice = preferredVoice;
-  }
-
+  if (preferredVoice) utterance.voice = preferredVoice;
   utterance.rate = 0.9;
-  utterance.pitch = 1;
-
+  
   window.speechSynthesis.speak(utterance);
 }
 
@@ -161,6 +200,33 @@ const POPUP_CSS = `
 .lp-actions { display: none; }
 .lp-error { color: #ef4444; font-size: 14px; padding: 8px 0; }
 .lp-divider { height: 1px; background: #ece5ec; margin: 10px 0; }
+.lp-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #240029;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 2147483647;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: lp-fade-in-up 0.3s ease-out;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lp-toast.lp-hiding {
+  animation: lp-fade-out-down 0.3s ease-in forwards;
+}
+@keyframes lp-fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes lp-fade-out-down {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(20px); }
+}
 `;
 
 let currentHost: HTMLElement | null = null;
@@ -171,7 +237,7 @@ const translatedNodes = new WeakSet<Text>();
 
 const ICONS = {
   translate:
-    '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12.87 15.07 11 13.2a4.7 4.7 0 0 0 .95-2.2h2.39v-2H7v2h2.86A6.7 6.7 0 0 1 7 15.3l1.4 1.4a8.7 8.7 0 0 0 3.18-2.53l1.7 1.7.59-1.8ZM17.5 10h-2l-4.5 12h2l1.12-3h4.76L20 22h2l-4.5-12Zm-2.56 7 1.44-4.33L17.82 17h-2.88Z"/></svg>',
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12.87 15.07 11 13.2a4.7 4.7 0 0 0 .95-2.2h2.39v-2H7v2h2.86A6.7 6.7 0 0 1 7 15.3l1.4 1.4a8.7 8.7 0 0 0 3.18-2.53l1.7 1.7.59-1.8ZM17.5 10h-2l-4.5 12h2l1.12-3h4.76L20 22h2l-4.5-12Zm-2.56 7 1.44-4.33L17.82 17h-2.88Z"/></svg>',
   speak:
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3 10v4h4l5 4V6L7 10H3Zm13.5 2a3.5 3.5 0 0 0-2.5-3.35v6.69A3.5 3.5 0 0 0 16.5 12Zm0-7.5v2.06A7 7 0 0 1 21 12a7 7 0 0 1-4.5 5.44v2.06A9 9 0 0 0 23 12a9 9 0 0 0-6.5-7.5Z"/></svg>',
   copy:
@@ -257,6 +323,7 @@ function hidePopup() {
   if (host) {
     host.remove();
     currentHost = null;
+    stopSpeaking();
   }
 }
 
@@ -270,6 +337,34 @@ function hideFab() {
 function hideAll() {
   hidePopup();
   hideFab();
+}
+
+let activeToast: HTMLElement | null = null;
+function showToast(message: string, duration = 3000, isLoading = false) {
+  const shadow = getOrCreateShadowRoot();
+  if (activeToast) {
+    activeToast.remove();
+  }
+  const toast = document.createElement("div");
+  toast.className = "lp-toast";
+  let html = '';
+  if (isLoading) {
+    html += '<div class="lp-spinner" style="width: 14px; height: 14px; border-width: 2px; border-color: rgba(255,255,255,0.3); border-top-color: white;"></div>';
+  }
+  html += `<span>${escapeHtml(message)}</span>`;
+  toast.innerHTML = html;
+  shadow.appendChild(toast);
+  activeToast = toast;
+
+  if (duration > 0) {
+    setTimeout(() => {
+      if (activeToast === toast) {
+        toast.classList.add("lp-hiding");
+        setTimeout(() => toast.remove(), 300);
+        activeToast = null;
+      }
+    }, duration);
+  }
 }
 
 function createPopupInShadow(): HTMLElement {
@@ -637,8 +732,8 @@ function showFab(selection: Selection, text: string) {
     color: #fff;
     border: none;
     border-radius: 999px;
-    width: 42px;
-    height: 42px;
+    width: 28px;
+    height: 28px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -661,10 +756,14 @@ function showFab(selection: Selection, text: string) {
   document.body.appendChild(fab);
   currentFab = fab;
 
-  const scrollX = window.scrollX || window.pageXOffset;
-  const scrollY = window.scrollY || window.pageYOffset;
-  fab.style.left = `${Math.max(10, rect.right + scrollX - 42)}px`;
-  fab.style.top = `${rect.bottom + scrollY + 8}px`;
+  const htmlRect = document.documentElement.getBoundingClientRect();
+  let targetLeft = rect.right - 2;
+  if (targetLeft + 28 > window.innerWidth - 8) {
+    targetLeft = window.innerWidth - 28 - 8;
+  }
+  
+  fab.style.left = `${targetLeft - htmlRect.left}px`;
+  fab.style.top = `${rect.bottom + 2 - htmlRect.top}px`;
 }
 
 function showPhrasePopup(selection: Selection, text: string) {
@@ -929,9 +1028,11 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 });
 
 // Page translation MVP
-function startPageTranslation() {
+async function startPageTranslation() {
   if (isTranslatingPage) return;
   isTranslatingPage = true;
+
+  showToast("Переводим страницу...", 0, true);
 
   const walker = document.createTreeWalker(
     document.body,
@@ -1004,30 +1105,42 @@ function startPageTranslation() {
   }
   if (currentBatch.length > 0) batches.push(currentBatch);
 
-  for (const batch of batches) {
-    const texts = batch.map((n) => n.textContent?.trim() || "");
-    const DELIMITER = "\n\u0001\n";
-    const combined = texts.join(DELIMITER);
-
-    safeSendMessage(
-      { type: "TRANSLATE", data: { text: combined, mode: "phrase" } },
-      (response) => {
-        if (response?.success) {
-          const result = response.result as PhraseTranslationResult;
-          const parts = result.translation
-            .split(DELIMITER)
-            .map((s) => s.trim());
-          batch.forEach((n, i) => {
-            if (parts[i] && !translatedNodes.has(n)) {
-              originalTexts.set(n, n.textContent || "");
-              n.textContent = parts[i];
-              translatedNodes.add(n);
-            }
-          });
-        }
-      },
-    );
+  if (batches.length === 0) {
+    showToast("На странице нет подходящего текста.", 3000);
+    isTranslatingPage = false;
+    return;
   }
+
+  const promises = batches.map((batch) => {
+    return new Promise<void>((resolve) => {
+      const texts = batch.map((n) => n.textContent?.trim() || "");
+      const DELIMITER = "\n\u0001\n";
+      const combined = texts.join(DELIMITER);
+
+      safeSendMessage(
+        { type: "TRANSLATE", data: { text: combined, mode: "phrase" } },
+        (response) => {
+          if (response?.success) {
+            const result = response.result as PhraseTranslationResult;
+            const parts = result.translation
+              .split(DELIMITER)
+              .map((s) => s.trim());
+            batch.forEach((n, i) => {
+              if (parts[i] && !translatedNodes.has(n)) {
+                originalTexts.set(n, n.textContent || "");
+                n.textContent = parts[i];
+                translatedNodes.add(n);
+              }
+            });
+          }
+          resolve();
+        },
+      );
+    });
+  });
+
+  await Promise.all(promises);
+  showToast("Страница успешно переведена!", 3000);
 }
 
 function restorePage() {
@@ -1044,4 +1157,5 @@ function restorePage() {
     }
   }
   isTranslatingPage = false;
+  showToast("Оригинал восстановлен", 2000);
 }

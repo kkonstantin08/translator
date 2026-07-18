@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "AI-powered English ↔ Russian translation",
   "permissions": ["storage", "activeTab", "contextMenus"],
-  "host_permissions": ["https://api.mistral.ai/*"],
+  "host_permissions": ["https://api.mistral.ai/*", "https://translate.google.com/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

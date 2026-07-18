@@ -98,6 +98,7 @@ body {
 }
 
 .lp-options-card input,
+.lp-options-card textarea,
 .lp-options-card select {
   width: 100%;
   padding: 10px 12px;
@@ -115,23 +116,28 @@ body {
 }
 
 .lp-options-card input:focus,
+.lp-options-card textarea:focus,
 .lp-options-card select:focus {
   outline: none;
   border-color: var(--lp-primary);
   box-shadow: 0 0 0 3px var(--lp-focus-ring);
 }
 
-.lp-options-card input::placeholder {
+.lp-options-card input::placeholder,
+.lp-options-card textarea::placeholder {
   color: var(--lp-text-muted);
 }
 
 .lp-key-row {
   display: flex;
   gap: 8px;
+  align-items: flex-start;
 }
 
-.lp-key-row input {
+.lp-key-row input,
+.lp-key-row textarea {
   flex: 1;
+  resize: vertical;
 }
 
 .lp-key-row button {
@@ -146,6 +152,23 @@ body {
   white-space: nowrap;
   font-family: inherit;
   transition: background 0.15s;
+}
+
+.lp-help-text {
+  font-size: 12px;
+  color: var(--lp-text-muted);
+  margin-top: -4px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.lp-help-text a {
+  color: var(--lp-primary);
+  text-decoration: none;
+}
+
+.lp-help-text a:hover {
+  text-decoration: underline;
 }
 
 .lp-key-row button:hover:not(:disabled) {
