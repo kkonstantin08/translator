@@ -1173,7 +1173,8 @@ async function startPageTranslation() {
   const batches: Text[][] = [];
   let currentBatch: Text[] = [];
   let currentChars = 0;
-  const MAX_BATCH_CHARS = 1500;
+  // Reduce batch size for faster individual responses (streaming effect)
+  const MAX_BATCH_CHARS = 800;
 
   for (const n of nodes) {
     const len = n.textContent?.length || 0;
@@ -1194,34 +1195,43 @@ async function startPageTranslation() {
     return;
   }
 
-  const promises = batches.map((batch) => {
-    return new Promise<void>((resolve) => {
+  // Process batches with concurrency limit to create a smooth top-to-bottom waterfall effect
+  const CONCURRENCY = 4;
+  let batchIndex = 0;
+
+  const processNextBatch = async (): Promise<void> => {
+    while (batchIndex < batches.length) {
+      const currentIndex = batchIndex++;
+      const batch = batches[currentIndex];
       const texts = batch.map((n) => n.textContent?.trim() || "");
       const jsonStr = JSON.stringify(texts);
 
-      safeSendMessage(
-        { type: "TRANSLATE", data: { text: jsonStr, mode: "batch" } },
-        (response) => {
-          if (response?.success) {
-            const result = response.result as BatchTranslationResult;
-            const parts = result.translations;
-            if (Array.isArray(parts)) {
-              batch.forEach((n, i) => {
-                if (parts[i] && !translatedNodes.has(n)) {
-                  originalTexts.set(n, n.textContent || "");
-                  n.textContent = parts[i];
-                  translatedNodes.add(n);
-                }
-              });
+      await new Promise<void>((resolve) => {
+        safeSendMessage(
+          { type: "TRANSLATE", data: { text: jsonStr, mode: "batch" } },
+          (response) => {
+            if (response?.success) {
+              const result = response.result as BatchTranslationResult;
+              const parts = result.translations;
+              if (Array.isArray(parts)) {
+                batch.forEach((n, i) => {
+                  if (parts[i] && !translatedNodes.has(n)) {
+                    originalTexts.set(n, n.textContent || "");
+                    n.textContent = parts[i];
+                    translatedNodes.add(n);
+                  }
+                });
+              }
             }
-          }
-          resolve();
-        },
-      );
-    });
-  });
+            resolve();
+          },
+        );
+      });
+    }
+  };
 
-  await Promise.all(promises);
+  const workers = Array.from({ length: CONCURRENCY }, () => processNextBatch());
+  await Promise.all(workers);
   showToast("Страница успешно переведена!", 3000);
 }
 
@@ -1241,3 +1251,193 @@ function restorePage() {
   isTranslatingPage = false;
   showToast("Оригинал восстановлен", 2000);
 }
+
+// -----------------------------------------
+// Writing Assistant (Reverse Translation)
+// -----------------------------------------
+
+let currentInputTarget: HTMLElement | null = null;
+let writeFab: HTMLElement | null = null;
+
+function isTextInput(el: HTMLElement): boolean {
+  if (el.tagName.toLowerCase() === "textarea") return true;
+  if (el.isContentEditable) return true;
+  if (el.tagName.toLowerCase() === "input") {
+    const type = (el as HTMLInputElement).type;
+    return ["text", "search", "email", "url"].includes(type);
+  }
+  return false;
+}
+
+function getTextInputValue(el: HTMLElement): string {
+  if (el.tagName.toLowerCase() === "textarea" || el.tagName.toLowerCase() === "input") {
+    return (el as HTMLInputElement | HTMLTextAreaElement).value;
+  }
+  if (el.isContentEditable) {
+    return el.innerText || "";
+  }
+  return "";
+}
+
+function setTextInputValue(el: HTMLElement, newText: string) {
+  if (el.tagName.toLowerCase() === "textarea" || el.tagName.toLowerCase() === "input") {
+    (el as HTMLInputElement | HTMLTextAreaElement).value = newText;
+  } else if (el.isContentEditable) {
+    el.innerText = newText;
+  }
+  // Trigger standard events so React/Vue/Angular notice the change
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function hideWriteFab() {
+  if (writeFab) {
+    writeFab.remove();
+    writeFab = null;
+  }
+  currentInputTarget = null;
+}
+
+function updateWriteFabPosition() {
+  if (!writeFab || !currentInputTarget) return;
+  const rect = currentInputTarget.getBoundingClientRect();
+  const htmlRect = document.documentElement.getBoundingClientRect();
+  
+  // Bottom-right corner of the input
+  const top = rect.bottom - htmlRect.top - 32;
+  const left = rect.right - htmlRect.left - 32;
+  
+  writeFab.style.top = `${top}px`;
+  writeFab.style.left = `${left}px`;
+}
+
+function showWriteFab(target: HTMLElement) {
+  hideWriteFab();
+  currentInputTarget = target;
+  
+  writeFab = document.createElement("button");
+  writeFab.className = "lp-fab";
+  writeFab.style.cssText = `
+    position: absolute;
+    z-index: 2147483645;
+    background: #df37a7;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(223, 55, 167, 0.3);
+    transition: transform 0.1s, opacity 0.2s;
+    opacity: 0.6;
+  `;
+  writeFab.innerHTML = ICONS.translate;
+  writeFab.title = "Улучшить / Перевести текст";
+
+  writeFab.addEventListener("mouseenter", () => {
+    if (writeFab) writeFab.style.opacity = "1";
+  });
+  writeFab.addEventListener("mouseleave", () => {
+    if (writeFab) writeFab.style.opacity = "0.6";
+  });
+
+  writeFab.addEventListener("mousedown", (e) => {
+    // Prevent blurring the input
+    e.preventDefault(); 
+    e.stopPropagation();
+  });
+
+  writeFab.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!currentInputTarget) return;
+    const text = getTextInputValue(currentInputTarget).trim();
+    if (!text) return;
+    
+    // Show loading state
+    const originalIcon = writeFab!.innerHTML;
+    writeFab!.innerHTML = '<div class="lp-spinner" style="width:14px;height:14px;border-width:2px;border-color:rgba(255,255,255,0.3);border-top-color:white;"></div>';
+    writeFab!.style.opacity = "1";
+    writeFab!.style.pointerEvents = "none";
+    
+    safeSendMessage(
+      { type: "TRANSLATE", data: { text, mode: "rewrite" } },
+      (response) => {
+        if (writeFab) {
+          writeFab.innerHTML = originalIcon;
+          writeFab.style.pointerEvents = "auto";
+          writeFab.style.opacity = "0.6";
+        }
+        
+        if (response?.success && response.result) {
+          const res = response.result as PhraseTranslationResult;
+          if (res.translation && currentInputTarget) {
+            const fixed = res.translation.replace(/\\n/g, '\n');
+            setTextInputValue(currentInputTarget, fixed);
+            
+            // Flash green to indicate success
+            if (writeFab) {
+              writeFab.style.background = "#10b981";
+              writeFab.style.boxShadow = "0 4px 12px rgba(16, 185, 129, 0.4)";
+              writeFab.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+              setTimeout(() => {
+                if (writeFab) {
+                  writeFab.style.background = "#df37a7";
+                  writeFab.style.boxShadow = "0 4px 12px rgba(223, 55, 167, 0.3)";
+                  writeFab.innerHTML = ICONS.translate;
+                }
+              }, 1500);
+            }
+          }
+        } else {
+          showToast("Ошибка перевода текста", 3000);
+        }
+      }
+    );
+  });
+
+  document.body.appendChild(writeFab);
+  updateWriteFabPosition();
+}
+
+// Global focus listeners
+document.addEventListener("focusin", (e) => {
+  const target = e.target as HTMLElement;
+  if (!target) return;
+  
+  if (isTextInput(target)) {
+    // Only show if the element is reasonably large
+    const rect = target.getBoundingClientRect();
+    if (rect.width > 100 && rect.height >= 20) {
+      showWriteFab(target);
+    }
+  }
+});
+
+document.addEventListener("focusout", (e) => {
+  const related = e.relatedTarget as HTMLElement;
+  // Don't hide if clicking on our FAB
+  if (related && (related === writeFab || writeFab?.contains(related))) {
+    return;
+  }
+  
+  // Use a tiny delay so clicks on FAB can process before blur hides it
+  setTimeout(() => {
+    if (document.activeElement !== currentInputTarget && document.activeElement !== writeFab) {
+      hideWriteFab();
+    }
+  }, 100);
+});
+
+// Update FAB position on resize and scroll
+window.addEventListener("resize", () => updateWriteFabPosition());
+document.addEventListener("scroll", () => {
+  if (writeFab && currentInputTarget) {
+    updateWriteFabPosition();
+  }
+}, { capture: true });

@@ -21,40 +21,54 @@ export async function callMistral(
     options?.model || (await getSetting("selectedModel")) || DEFAULT_MODEL;
 
   let lastError: Error | null = null;
+  let attempt = 0;
+  const maxAttempts = 4;
 
-  for (const apiKey of apiKeys) {
-    try {
-      const response = await fetch(MISTRAL_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: selectedModel,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.1,
-          response_format: { type: "json_object" },
-        }),
-      });
+  while (attempt < maxAttempts) {
+    for (const apiKey of apiKeys) {
+      try {
+        const response = await fetch(MISTRAL_API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.1,
+            response_format: { type: "json_object" },
+          }),
+        });
 
-      if (!response.ok) {
-        if (response.status === 401) throw new Error("invalid_api_key");
-        if (response.status === 429) throw new Error("rate_limit");
-        if (response.status >= 500) throw new Error("api_error");
-        throw new Error("network_error");
+        if (!response.ok) {
+          if (response.status === 401) throw new Error("invalid_api_key");
+          if (response.status === 429) throw new Error("rate_limit");
+          if (response.status >= 500) throw new Error("api_error");
+          throw new Error("network_error");
+        }
+
+        const data = (await response.json()) as {
+          choices?: { message?: { content?: string } }[];
+        };
+        return data.choices?.[0]?.message?.content || "";
+      } catch (error: any) {
+        lastError = error;
+        if (error.message === "rate_limit" || error.message === "invalid_api_key") {
+          continue;
+        }
+        throw error;
       }
+    }
 
-      const data = (await response.json()) as {
-        choices?: { message?: { content?: string } }[];
-      };
-      return data.choices?.[0]?.message?.content || "";
-    } catch (error: any) {
-      lastError = error;
-      if (error.message === "rate_limit" || error.message === "invalid_api_key") {
-        continue;
+    if (lastError?.message === "rate_limit") {
+      attempt++;
+      if (attempt < maxAttempts) {
+        const delay = Math.pow(2, attempt - 1) * 2000; // 2s, 4s, 8s
+        await new Promise((r) => setTimeout(r, delay));
       }
-      throw error;
+    } else {
+      break;
     }
   }
 

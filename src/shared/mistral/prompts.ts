@@ -109,3 +109,28 @@ Rules:
 - Maintain the exact order and number of items in the array (very important).
 - No explanations outside the JSON.`;
 }
+
+export function buildRewritePrompt(
+  text: string,
+): string {
+  const detected = detectLanguage(text);
+  const target = detected === "en" ? "Russian" : "English";
+
+  return `You are a professional writing assistant. Translate or rewrite the following text into natural, native-sounding ${target}. 
+
+Text: "${text}"
+
+Return ONLY a valid JSON object:
+{
+  "detectedLanguage": "${detected}",
+  "targetLanguage": "${target === "Russian" ? "ru" : "en"}",
+  "translation": "..."
+}
+
+Rules:
+- If the text is informal, keep it informal but natural.
+- If it's formal, keep it formal.
+- Fix any typos or grammar issues while translating.
+- No explanations outside the JSON.
+- IMPORTANT: For paragraphs, use double newlines. Strictly escape all newlines as \\\\n.`;
+}

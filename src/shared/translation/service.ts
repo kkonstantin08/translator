@@ -4,6 +4,7 @@ import {
   buildPhrasePrompt,
   buildPopupPrompt,
   buildBatchPrompt,
+  buildRewritePrompt,
 } from "../mistral/prompts";
 import { getSettings } from "../storage";
 import { translateWithFallback } from "./fallback";
@@ -50,6 +51,8 @@ export async function translate(
     prompt = buildPhrasePrompt(request.text, settings.defaultTargetLanguage);
   } else if (request.mode === "batch") {
     prompt = buildBatchPrompt(request.text, settings.defaultTargetLanguage);
+  } else if (request.mode === "rewrite") {
+    prompt = buildRewritePrompt(request.text);
   } else {
     prompt = buildPopupPrompt(
       request.text,

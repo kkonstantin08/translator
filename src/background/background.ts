@@ -8,6 +8,16 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Перевести выделенное",
     contexts: ["selection"],
   });
+  chrome.contextMenus.create({
+    id: "translate-page",
+    title: "Перевести страницу на русский (LinguaPop)",
+    contexts: ["page"],
+  });
+  chrome.contextMenus.create({
+    id: "restore-page",
+    title: "Вернуть оригинал страницы",
+    contexts: ["page"],
+  });
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -24,6 +34,14 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       .catch(() => {
         // Tab may not have content script loaded
       });
+  } else if (info.menuItemId === "translate-page" && tab?.id) {
+    chrome.tabs
+      .sendMessage(tab.id, { type: "START_PAGE_TRANSLATION" })
+      .catch(() => {});
+  } else if (info.menuItemId === "restore-page" && tab?.id) {
+    chrome.tabs
+      .sendMessage(tab.id, { type: "RESTORE_PAGE" })
+      .catch(() => {});
   }
 });
 

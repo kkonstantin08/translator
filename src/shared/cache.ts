@@ -6,6 +6,16 @@ interface CacheEntry {
 
 const CACHE_PREFIX = "lp_cache_";
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
+const MAX_CACHE_ITEMS = 1000;
+
+function hashString(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash.toString(36);
+}
 
 function buildKey(
   text: string,
@@ -13,8 +23,9 @@ function buildKey(
   sourceLang?: string,
   targetLang?: string,
 ): string {
-  const normalized = text.trim().toLowerCase().slice(0, 200);
-  return `${mode}_${sourceLang || "auto"}_${targetLang || "default"}_${normalized}`;
+  const hash = hashString(text);
+  const snippet = text.trim().toLowerCase().slice(0, 30).replace(/[^a-z0-9а-яё]/g, "");
+  return `${mode}_${sourceLang || "auto"}_${targetLang || "default"}_${snippet}_${hash}`;
 }
 
 export async function getCachedTranslation(
@@ -33,6 +44,11 @@ export async function getCachedTranslation(
       await chrome.storage.local.remove(key);
       return null;
     }
+    
+    // Update timestamp to mark as recently used
+    entry.timestamp = Date.now();
+    await chrome.storage.local.set({ [key]: entry });
+    
     return entry.result;
   } catch {
     return null;
@@ -54,6 +70,20 @@ export async function setCachedTranslation(
       timestamp: Date.now(),
     };
     await chrome.storage.local.set({ [key]: entry });
+    
+    // LRU Cleanup
+    const all = await chrome.storage.local.get();
+    const cacheKeys = Object.keys(all).filter((k) => k.startsWith(CACHE_PREFIX));
+    
+    if (cacheKeys.length > MAX_CACHE_ITEMS) {
+      const entries = cacheKeys.map((k) => all[k] as CacheEntry);
+      entries.sort((a, b) => a.timestamp - b.timestamp);
+      
+      const excess = cacheKeys.length - MAX_CACHE_ITEMS;
+      const keysToRemove = entries.slice(0, excess).map((e) => e.key);
+      
+      await chrome.storage.local.remove(keysToRemove);
+    }
   } catch {
     // Silently fail if cache is unavailable
   }

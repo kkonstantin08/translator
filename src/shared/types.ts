@@ -34,7 +34,7 @@ export type TranslationResult = WordTranslationResult | PhraseTranslationResult 
 
 export interface TranslationRequest {
   text: string;
-  mode: "word" | "phrase" | "popup" | "batch";
+  mode: "word" | "phrase" | "popup" | "batch" | "rewrite";
   sourceLanguage?: "auto" | "en" | "ru";
   targetLanguage?: "ru" | "en";
 }
