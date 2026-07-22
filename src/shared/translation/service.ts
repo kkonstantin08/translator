@@ -3,6 +3,7 @@ import {
   buildWordPrompt,
   buildPhrasePrompt,
   buildPopupPrompt,
+  buildBatchPrompt,
 } from "../mistral/prompts";
 import { getSettings } from "../storage";
 import { translateWithFallback } from "./fallback";
@@ -47,6 +48,8 @@ export async function translate(
     prompt = buildWordPrompt(request.text, settings.defaultTargetLanguage);
   } else if (request.mode === "phrase") {
     prompt = buildPhrasePrompt(request.text, settings.defaultTargetLanguage);
+  } else if (request.mode === "batch") {
+    prompt = buildBatchPrompt(request.text, settings.defaultTargetLanguage);
   } else {
     prompt = buildPopupPrompt(
       request.text,
@@ -91,6 +94,16 @@ export async function translate(
           pronunciation: "",
           shortExamples: [],
         } as WordTranslationResult;
+      } else if (request.mode === "batch") {
+        let translationsFallback: string[] = [];
+        try {
+          translationsFallback = JSON.parse(request.text);
+        } catch {
+          translationsFallback = [request.text];
+        }
+        result = {
+          translations: translationsFallback
+        } as any;
       } else {
         result = {
           detectedLanguage: "unknown",

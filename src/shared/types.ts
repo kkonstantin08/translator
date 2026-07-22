@@ -26,11 +26,15 @@ export interface PhraseTranslationResult {
   translation: string;
 }
 
-export type TranslationResult = WordTranslationResult | PhraseTranslationResult;
+export interface BatchTranslationResult {
+  translations: string[];
+}
+
+export type TranslationResult = WordTranslationResult | PhraseTranslationResult | BatchTranslationResult;
 
 export interface TranslationRequest {
   text: string;
-  mode: "word" | "phrase" | "popup";
+  mode: "word" | "phrase" | "popup" | "batch";
   sourceLanguage?: "auto" | "en" | "ru";
   targetLanguage?: "ru" | "en";
 }

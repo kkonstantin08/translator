@@ -3,6 +3,18 @@ import type {
   PhraseTranslationResult,
 } from "../shared/types";
 
+import TurndownService from "turndown";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+
+const turndownService = new TurndownService({
+  headingStyle: "atx",
+  hr: "---",
+  bulletListMarker: "-",
+  codeBlockStyle: "fenced",
+  emDelimiter: "*"
+});
+
 let currentAudioContext: AudioContext | null = null;
 let currentAudioSource: AudioBufferSourceNode | null = null;
 
@@ -141,6 +153,7 @@ const POPUP_CSS = `
 }
 .lp-fab:hover { background: #c42e92; transform: translateY(-1px); }
 .lp-fab:active { transform: translateY(0); }
+.lp-fab svg { margin-left: 1px; margin-top: 1px; }
 .lp-loading { color: #6d526d; font-size: 14px; padding: 8px 0; display: flex; align-items: center; gap: 10px; }
 .lp-spinner {
   width: 16px; height: 16px;
@@ -172,6 +185,12 @@ const POPUP_CSS = `
 .lp-result-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding-right: 20px; }
 .lp-main-translation { font-size: 16px; font-weight: 600; color: #df37a7; flex: 1; min-width: 0; }
 .lp-phrase-translation { font-size: 15px; color: #333; line-height: 1.6; flex: 1; min-width: 0; }
+.lp-phrase-translation p { margin-bottom: 8px; }
+.lp-phrase-translation p:last-child { margin-bottom: 0; }
+.lp-phrase-translation ul, .lp-phrase-translation ol { padding-left: 20px; margin-bottom: 8px; }
+.lp-phrase-translation li { margin-bottom: 4px; }
+.lp-phrase-translation strong { font-weight: 600; }
+.lp-phrase-translation em { font-style: italic; }
 .lp-icon-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .lp-icon-btn {
   width: 32px;
@@ -633,21 +652,33 @@ function renderPhraseResult(
   popup: HTMLElement,
   result: PhraseTranslationResult,
   originalText: string,
+  rawOriginalText?: string,
 ) {
   const lang = result.detectedLanguage === "ru" ? "ru" : "en";
+
+  // Fix literal \n strings if Mistral over-escaped them
+  const fixedTranslation = result.translation.replace(/\\n/g, '\n');
+  const rawHtml = marked.parse(fixedTranslation, { breaks: true }) as string;
+  const safeHtml = DOMPurify.sanitize(rawHtml);
+  
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = safeHtml;
+  const plainText = tempDiv.innerText.trim() || result.translation;
+  
+  const safeOriginalText = rawOriginalText || originalText;
 
   popup.innerHTML = `
     <button class="lp-close-btn" title="Закрыть">×</button>
     <div class="lp-result-header">
-      <div class="lp-phrase-translation">${escapeHtml(result.translation)}</div>
+      <div class="lp-phrase-translation">${safeHtml}</div>
       <div class="lp-icon-actions">
-        <button class="lp-icon-btn lp-icon-speak" type="button" title="Speak" data-text="${escapeHtml(originalText)}" data-lang="${lang}">${ICONS.speak}</button>
-        <button class="lp-icon-btn lp-icon-copy" type="button" title="Copy" data-text="${escapeHtml(result.translation)}">${ICONS.copy}</button>
+        <button class="lp-icon-btn lp-icon-speak" type="button" title="Speak" data-text="${escapeHtml(safeOriginalText)}" data-lang="${lang}">${ICONS.speak}</button>
+        <button class="lp-icon-btn lp-icon-copy" type="button" title="Copy" data-text="${escapeHtml(plainText)}">${ICONS.copy}</button>
       </div>
     </div>
     <div class="lp-actions">
-      <button class="lp-btn lp-btn-speak" data-text="${escapeHtml(originalText)}" data-lang="${lang}">Озвучить</button>
-      <button class="lp-btn lp-btn-copy" data-text="${escapeHtml(result.translation)}">Копировать</button>
+      <button class="lp-btn lp-btn-speak" data-text="${escapeHtml(safeOriginalText)}" data-lang="${lang}">Озвучить</button>
+      <button class="lp-btn lp-btn-copy" data-text="${escapeHtml(plainText)}">Копировать</button>
     </div>
   `;
 
@@ -716,7 +747,7 @@ function showWordPopup(selection: Selection, text: string) {
   );
 }
 
-function showFab(selection: Selection, text: string) {
+function showFab(selection: Selection, text: string, rawText?: string) {
   hidePopup();
   hideFab();
 
@@ -750,7 +781,7 @@ function showFab(selection: Selection, text: string) {
   fab.addEventListener("click", (e) => {
     e.stopPropagation();
     hideFab();
-    showPhrasePopup(selection, text);
+    showPhrasePopup(selection, text, rawText);
   });
 
   document.body.appendChild(fab);
@@ -766,7 +797,7 @@ function showFab(selection: Selection, text: string) {
   fab.style.top = `${rect.bottom + 2 - htmlRect.top}px`;
 }
 
-function showPhrasePopup(selection: Selection, text: string) {
+function showPhrasePopup(selection: Selection, text: string, rawText?: string) {
   hidePopup();
 
   const range = selection.getRangeAt(0);
@@ -799,6 +830,7 @@ function showPhrasePopup(selection: Selection, text: string) {
           currentPopup,
           response.result as PhraseTranslationResult,
           text,
+          rawText
         );
       } else {
         renderError(currentPopup, response?.error || "unknown");
@@ -821,10 +853,27 @@ function handleSelection() {
       return;
     }
 
-    const text = selection.toString().trim();
-    if (!text) {
+    const rawText = selection.toString().trim();
+    if (!rawText) {
       hideAll();
       return;
+    }
+
+    let text = rawText;
+    try {
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const container = document.createElement("div");
+        container.appendChild(range.cloneContents());
+        const unwanted = container.querySelectorAll("script, style, noscript, iframe");
+        unwanted.forEach(n => n.remove());
+        const md = turndownService.turndown(container.innerHTML).trim();
+        if (md) {
+          text = md;
+        }
+      }
+    } catch (e) {
+      console.warn("Turndown failed", e);
     }
 
     // Don't show popup for selections inside inputs/textareas
@@ -849,11 +898,11 @@ function handleSelection() {
     checkExcluded().then((excluded) => {
       if (excluded) return;
 
-      const words = text.split(/\s+/).filter((w) => w.length > 0);
-      if (words.length === 1 && text.length > 0 && text.length < 50) {
-        showWordPopup(selection, text);
+      const words = rawText.split(/\s+/).filter((w) => w.length > 0);
+      if (words.length === 1 && rawText.length > 0 && rawText.length < 50) {
+        showWordPopup(selection, rawText);
       } else {
-        showFab(selection, text);
+        showFab(selection, text, rawText);
       }
     });
   }, 150);
@@ -922,13 +971,30 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) {
-      const text = selection.toString().trim();
-      if (text) {
-        const words = text.split(/\s+/).filter((w) => w.length > 0);
-        if (words.length === 1 && text.length < 50) {
-          showWordPopup(selection, text);
+      const rawText = selection.toString().trim();
+      if (rawText) {
+        let text = rawText;
+        try {
+          if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const container = document.createElement("div");
+            container.appendChild(range.cloneContents());
+            const unwanted = container.querySelectorAll("script, style, noscript, iframe");
+            unwanted.forEach(n => n.remove());
+            const md = turndownService.turndown(container.innerHTML).trim();
+            if (md) {
+              text = md;
+            }
+          }
+        } catch (e) {
+          console.warn("Turndown failed", e);
+        }
+
+        const words = rawText.split(/\s+/).filter((w) => w.length > 0);
+        if (words.length === 1 && rawText.length < 50) {
+          showWordPopup(selection, rawText);
         } else {
-          showPhrasePopup(selection, text);
+          showPhrasePopup(selection, text, rawText);
         }
       }
     }
@@ -1008,13 +1074,30 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.type === "KEYBOARD_SHORTCUT_TRANSLATE") {
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) {
-      const text = selection.toString().trim();
-      if (text) {
-        const words = text.split(/\s+/).filter((w) => w.length > 0);
-        if (words.length === 1 && text.length < 50) {
-          showWordPopup(selection, text);
+      const rawText = selection.toString().trim();
+      if (rawText) {
+        let text = rawText;
+        try {
+          if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const container = document.createElement("div");
+            container.appendChild(range.cloneContents());
+            const unwanted = container.querySelectorAll("script, style, noscript, iframe");
+            unwanted.forEach(n => n.remove());
+            const md = turndownService.turndown(container.innerHTML).trim();
+            if (md) {
+              text = md;
+            }
+          }
+        } catch (e) {
+          console.warn("Turndown failed", e);
+        }
+
+        const words = rawText.split(/\s+/).filter((w) => w.length > 0);
+        if (words.length === 1 && rawText.length < 50) {
+          showWordPopup(selection, rawText);
         } else {
-          showPhrasePopup(selection, text);
+          showPhrasePopup(selection, text, rawText);
         }
         sendResponse({ success: true });
         return true;
@@ -1072,8 +1155,8 @@ async function startPageTranslation() {
         }
 
         const text = node.textContent?.trim() || "";
-        if (text.length < 3) return NodeFilter.FILTER_REJECT;
-        if (!/[a-zA-Zа-яёА-ЯЁ]/.test(text)) return NodeFilter.FILTER_REJECT;
+        if (text.length === 0) return NodeFilter.FILTER_REJECT;
+        if (!/[a-zA-Zа-яёА-ЯЁ0-9]/.test(text)) return NodeFilter.FILTER_REJECT;
         if (translatedNodes.has(node as Text)) return NodeFilter.FILTER_REJECT;
 
         return NodeFilter.FILTER_ACCEPT;
@@ -1090,7 +1173,7 @@ async function startPageTranslation() {
   const batches: Text[][] = [];
   let currentBatch: Text[] = [];
   let currentChars = 0;
-  const MAX_BATCH_CHARS = 800;
+  const MAX_BATCH_CHARS = 1500;
 
   for (const n of nodes) {
     const len = n.textContent?.length || 0;
@@ -1114,24 +1197,23 @@ async function startPageTranslation() {
   const promises = batches.map((batch) => {
     return new Promise<void>((resolve) => {
       const texts = batch.map((n) => n.textContent?.trim() || "");
-      const DELIMITER = "\n\u0001\n";
-      const combined = texts.join(DELIMITER);
+      const jsonStr = JSON.stringify(texts);
 
       safeSendMessage(
-        { type: "TRANSLATE", data: { text: combined, mode: "phrase" } },
+        { type: "TRANSLATE", data: { text: jsonStr, mode: "batch" } },
         (response) => {
           if (response?.success) {
-            const result = response.result as PhraseTranslationResult;
-            const parts = result.translation
-              .split(DELIMITER)
-              .map((s) => s.trim());
-            batch.forEach((n, i) => {
-              if (parts[i] && !translatedNodes.has(n)) {
-                originalTexts.set(n, n.textContent || "");
-                n.textContent = parts[i];
-                translatedNodes.add(n);
-              }
-            });
+            const result = response.result as BatchTranslationResult;
+            const parts = result.translations;
+            if (Array.isArray(parts)) {
+              batch.forEach((n, i) => {
+                if (parts[i] && !translatedNodes.has(n)) {
+                  originalTexts.set(n, n.textContent || "");
+                  n.textContent = parts[i];
+                  translatedNodes.add(n);
+                }
+              });
+            }
           }
           resolve();
         },

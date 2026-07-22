@@ -55,7 +55,9 @@ Return ONLY a valid JSON object:
 Rules:
 - Provide one natural, accurate translation.
 - No explanations outside the JSON.
-- Preserve the tone and meaning.`;
+- Preserve the tone and meaning.
+- The text contains Markdown formatting. You MUST preserve the exact Markdown formatting (such as bold **, italic *, lists -).
+- IMPORTANT: For paragraphs, use double newlines. You must strictly escape all newlines in the JSON string as \\\\n.`;
 }
 
 export function buildPopupPrompt(
@@ -84,4 +86,26 @@ Return ONLY a valid JSON object:
 Rules:
 - One natural, accurate translation.
 - No extra text outside JSON.`;
+}
+
+export function buildBatchPrompt(
+  textArrayStr: string,
+  defaultTarget: "ru" | "en",
+): string {
+  const target = defaultTarget === "ru" ? "Russian" : "English";
+
+  return `Translate the following JSON array of strings into ${target}. 
+
+Input:
+${textArrayStr}
+
+Return ONLY a valid JSON object with this exact structure:
+{
+  "translations": ["...", "..."]
+}
+
+Rules:
+- Provide one natural translation for each string.
+- Maintain the exact order and number of items in the array (very important).
+- No explanations outside the JSON.`;
 }
