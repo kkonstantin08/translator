@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LinguaPop AI",
   "version": "1.0.0",
-  "description": "AI-powered English ↔ Russian translation",
+  "description": "Умный ИИ-переводчик: словари, контекстный перевод, стриминг страниц и ИИ-помощник при письме (на базе Mistral).",
   "permissions": ["storage", "activeTab", "contextMenus"],
   "host_permissions": ["https://api.mistral.ai/*", "https://translate.google.com/*"],
   "background": {
