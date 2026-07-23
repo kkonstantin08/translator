@@ -1432,11 +1432,16 @@ function showWriteFab(target: HTMLElement) {
 
     const rect = writeFab!.getBoundingClientRect();
     writeMenu = document.createElement("div");
+    let menuLeft = rect.left + window.scrollX;
+    if (rect.left + 170 > window.innerWidth) {
+      menuLeft = window.innerWidth - 170 - 10 + window.scrollX;
+    }
+
     writeMenu.style.cssText = `
       position: absolute;
       z-index: 2147483646;
       top: ${rect.bottom + window.scrollY + 8}px;
-      left: ${rect.left + window.scrollX}px;
+      left: ${menuLeft}px;
       background: #ffffff;
       border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
@@ -1444,7 +1449,7 @@ function showWriteFab(target: HTMLElement) {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      width: 180px;
+      width: 170px;
       font-family: system-ui, sans-serif;
       font-size: 13px;
       color: #333;
@@ -1452,11 +1457,11 @@ function showWriteFab(target: HTMLElement) {
     `;
 
     const options: { label: string, tone: "normal" | "formal" | "friendly" | "shorter" | "grammar_only" }[] = [
-      { label: "✨ Обычный перевод", tone: "normal" },
-      { label: "👔 Формальный", tone: "formal" },
-      { label: "👋 Дружелюбный", tone: "friendly" },
-      { label: "✂️ Сделать короче", tone: "shorter" },
-      { label: "✅ Только грамматика", tone: "grammar_only" }
+      { label: "Обычный перевод", tone: "normal" },
+      { label: "Формальный", tone: "formal" },
+      { label: "Дружелюбный", tone: "friendly" },
+      { label: "Сделать короче", tone: "shorter" },
+      { label: "Только грамматика", tone: "grammar_only" }
     ];
 
     options.forEach(opt => {
@@ -1474,6 +1479,7 @@ function showWriteFab(target: HTMLElement) {
         font-size: 13px;
         transition: background 0.15s;
         width: 100%;
+        white-space: nowrap;
       `;
       btn.addEventListener("mouseenter", () => btn.style.background = "#f5f2f5");
       btn.addEventListener("mouseleave", () => btn.style.background = "none");
