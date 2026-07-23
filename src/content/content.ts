@@ -1532,7 +1532,7 @@ function executeRewrite(tone: "normal" | "formal" | "friendly" | "shorter" | "gr
       if (response?.success && response.result) {
         const res = response.result as PhraseTranslationResult;
         if (res.translation && currentInputTarget) {
-          const fixed = res.translation.replace(/\\n/g, '\\n');
+          const fixed = res.translation.replace(/\\n/g, '\n');
           setTextInputValue(currentInputTarget, fixed);
           
           if (writeFab) {
