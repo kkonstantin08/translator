@@ -1423,7 +1423,7 @@ function showWriteFab(target: HTMLElement) {
 }
 
 // Global focus listeners
-document.addEventListener("focusin", (e) => {
+document.addEventListener("focusin", async (e) => {
   const target = e.target as HTMLElement;
   if (!target) return;
   
@@ -1431,7 +1431,13 @@ document.addEventListener("focusin", (e) => {
     // Only show if the element is reasonably large
     const rect = target.getBoundingClientRect();
     if (rect.width > 100 && rect.height >= 20) {
-      showWriteFab(target);
+      const excluded = await checkExcluded();
+      if (excluded) return;
+      
+      // Make sure the element is still focused after async check
+      if (document.activeElement === target) {
+        showWriteFab(target);
+      }
     }
   }
 });

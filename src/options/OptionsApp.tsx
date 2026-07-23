@@ -122,6 +122,38 @@ export default function OptionsApp() {
     }
   }, []);
 
+  const handleExport = useCallback(() => {
+    if (!settings) return;
+    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "linguapop-settings.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [settings]);
+
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === "object") {
+          await setSettings(parsed);
+          setLocalSettings({ ...settings, ...parsed });
+          alert("Настройки успешно импортированы!");
+        }
+      } catch (err) {
+        alert("Ошибка при чтении файла настроек");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ""; // Reset input
+  }, [settings]);
+
   if (!settings) return null;
 
   const currentProviderConfig = settings.providers[settings.activeProvider];
@@ -129,8 +161,17 @@ export default function OptionsApp() {
   return (
     <div className="lp-options-page">
       <div className="lp-options-card" style={{ maxWidth: '800px' }}>
-        <h1>LinguaPop AI — Настройки</h1>
-        <div className="lp-options-subtitle">Умный переводчик и помощник</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <div>
+            <h1 style={{ margin: 0, marginBottom: '4px' }}>LinguaPop AI — Настройки</h1>
+            <div className="lp-options-subtitle" style={{ margin: 0 }}>Умный переводчик и помощник</div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="lp-btn" onClick={handleExport} style={{ padding: '6px 12px', fontSize: '13px' }}>Экспорт</button>
+            <button className="lp-btn" onClick={() => document.getElementById('import-file')?.click()} style={{ padding: '6px 12px', fontSize: '13px' }}>Импорт</button>
+            <input type="file" id="import-file" style={{ display: 'none' }} accept=".json" onChange={handleImport} />
+          </div>
+        </div>
 
         <div className="lp-tabs">
           <button className={activeTab === "providers" ? "active" : ""} onClick={() => setActiveTab("providers")}>Провайдеры ИИ</button>
@@ -274,6 +315,20 @@ export default function OptionsApp() {
                 <option value="light">Светлая</option>
                 <option value="dark">Тёмная</option>
               </select>
+            </section>
+
+            <section>
+              <h2>Исключения для помощника</h2>
+              <div className="lp-help-text">Укажите домены (по одному в строке), на которых кнопка помощника не будет появляться (например: github.com).</div>
+              <textarea
+                value={settings.excludedSites?.join("\n") || ""}
+                onChange={(e) => {
+                  const sites = e.target.value.split("\n").map(s => s.trim()).filter(Boolean);
+                  updateSetting("excludedSites", sites);
+                }}
+                rows={4}
+                placeholder="github.com&#10;web.telegram.org"
+              />
             </section>
 
             <section>
