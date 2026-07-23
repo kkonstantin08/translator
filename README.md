@@ -7,10 +7,13 @@
 * **🤖 Multi-LLM Support:** Choose your preferred AI provider! LinguaPop natively supports OpenAI (ChatGPT), Anthropic (Claude), Google (Gemini), and Mistral. Bring your own API keys.
 * **⚡ Smart Fallback (Chrome Built-in AI):** If your primary API key runs out or the network drops, LinguaPop can automatically fall back to Chrome's local, built-in AI models (Nano) to ensure you never lose translation capabilities.
 * **✍️ AI Writing Assistant:** Click the floating LinguaPop button inside any `<textarea>` or input field. Write in your native language, and the AI will rewrite it into perfect, native-sounding English (or another chosen language), instantly replacing the text right in the input box!
+  * **Selectable Tones:** Choose between Normal, Formal, Friendly, Shorter, or Grammar-only corrections to match your context perfectly.
+* **📄 Built-in PDF Reader:** Native support for rendering and translating text directly inside local and remote PDF files. Just right-click any PDF link and select **Открыть в LinguaPop PDF**.
 * **📖 Smart Dictionary (Single Word):** Highlight any word to instantly see a rich popup with alternatives, part of speech, pronunciation (IPA), and contextual examples.
 * **📝 Contextual Phrase Translation:** Highlight sentences or paragraphs. The model translates them with high accuracy, preserving the original tone and Markdown formatting.
 * **🌊 Waterfall Page Translation:** Translate entire web pages with a beautiful top-to-bottom streaming effect. The extension intelligently batches paragraphs and replaces them live as responses arrive.
 * **⚙️ Advanced Customization:**
+  * **Themes & Accent Colors:** Personalize the extension's look to match your style.
   * **Site Exceptions:** Configure a blacklist of domains where the Writing Assistant should not appear.
   * **Import / Export Settings:** Easily back up your API keys, preferences, and excluded sites to a JSON file and restore them anytime.
   * **Translation History:** Keep track of your original inputs and the AI-generated rewrites.
