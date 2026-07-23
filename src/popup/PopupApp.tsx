@@ -3,8 +3,8 @@ import { getSettings, setSettings } from "../shared/storage";
 import { translate } from "../shared/translation/service";
 import { speak } from "../shared/tts/tts";
 import { detectLanguage } from "../shared/language";
-import { MISTRAL_MODELS, UI_STRINGS } from "../shared/constants";
-import type { PhraseTranslationResult } from "../shared/types";
+import { MODELS, UI_STRINGS } from "../shared/constants";
+import type { PhraseTranslationResult, Settings, ProviderID } from "../shared/types";
 
 function applyThemeClass(theme: "light" | "dark" | "system") {
   const isDark =
@@ -23,18 +23,14 @@ export default function PopupApp() {
   const [result, setResult] = useState("");
   const [sourceLang, setSourceLang] = useState<"auto" | "en" | "ru">("auto");
   const [targetLang, setTargetLang] = useState<"ru" | "en">("ru");
-  const [model, setModel] = useState("");
-  const [llmEnabled, setLlmEnabled] = useState(true);
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
+  const [settings, setLocalSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     getSettings().then((s) => {
-      setModel(s.selectedModel);
-      setLlmEnabled(s.llmEnabled);
-      setTheme(s.theme);
+      setLocalSettings(s);
       applyThemeClass(s.theme);
     });
 
@@ -116,14 +112,19 @@ export default function PopupApp() {
   }, []);
 
   const cycleTheme = useCallback(async () => {
+    if (!settings) return;
+    const theme = settings.theme;
     const next =
       theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
-    setTheme(next);
-    await setSettings({ theme: next });
+    setLocalSettings({ ...settings, theme: next });
+    await setSettings({ ...settings, theme: next });
     applyThemeClass(next);
-  }, [theme]);
+  }, [settings]);
 
-  const themeIcon = theme === "light" ? "☀" : theme === "dark" ? "☾" : "◐";
+  if (!settings) return null;
+
+  const themeIcon = settings.theme === "light" ? "☀" : settings.theme === "dark" ? "☾" : "◐";
+  const currentProviderModels = MODELS[settings.activeProvider] || [];
 
   return (
     <div className="lp-popup-ui">
@@ -133,7 +134,7 @@ export default function PopupApp() {
           <button
             onClick={cycleTheme}
             className="lp-icon-btn"
-            title={`Тема: ${theme}`}
+            title={`Тема: ${settings.theme}`}
           >
             {themeIcon}
           </button>
@@ -182,13 +183,23 @@ export default function PopupApp() {
 
       <div className="lp-options-row">
         <select
-          value={model}
-          onChange={(e) => {
-            setModel(e.target.value);
-            setSettings({ selectedModel: e.target.value });
+          value={settings.providers[settings.activeProvider].selectedModel}
+          onChange={async (e) => {
+            const updated = {
+              ...settings,
+              providers: {
+                ...settings.providers,
+                [settings.activeProvider]: {
+                  ...settings.providers[settings.activeProvider],
+                  selectedModel: e.target.value
+                }
+              }
+            };
+            setLocalSettings(updated);
+            await setSettings(updated);
           }}
         >
-          {MISTRAL_MODELS.map((m) => (
+          {currentProviderModels.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
             </option>
@@ -197,10 +208,11 @@ export default function PopupApp() {
         <label className="lp-toggle">
           <input
             type="checkbox"
-            checked={llmEnabled}
-            onChange={(e) => {
-              setLlmEnabled(e.target.checked);
-              setSettings({ llmEnabled: e.target.checked });
+            checked={settings.llmEnabled}
+            onChange={async (e) => {
+              const updated = { ...settings, llmEnabled: e.target.checked };
+              setLocalSettings(updated);
+              await setSettings(updated);
             }}
           />
           LLM

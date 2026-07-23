@@ -354,3 +354,132 @@ body {
 .lp-save-btn:hover {
   background: var(--lp-primary-hover);
 }
+
+.lp-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--lp-border);
+  padding-bottom: 8px;
+}
+
+.lp-tabs button {
+  background: none;
+  border: none;
+  color: var(--lp-text-muted);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.lp-tabs button:hover {
+  color: var(--lp-text-primary);
+  background: var(--lp-tag-bg);
+}
+
+.lp-tabs button.active {
+  color: var(--lp-primary);
+  background: var(--lp-focus-ring);
+}
+
+.lp-key-statuses {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lp-status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--lp-bg);
+  border-radius: 6px;
+  font-size: 13px;
+  border: 1px solid var(--lp-border);
+}
+
+.lp-status-item.valid {
+  border-color: var(--lp-success-border);
+}
+.lp-status-item.invalid {
+  border-color: var(--lp-error-border);
+}
+
+.lp-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.lp-badge.checking {
+  background: #e2e8f0;
+  color: #475569;
+}
+.lp-badge.valid {
+  background: var(--lp-success-bg);
+  color: #16a34a;
+}
+.lp-badge.invalid {
+  background: var(--lp-error-bg);
+  color: #ef4444;
+}
+
+.lp-danger-btn {
+  padding: 8px 16px;
+  background: var(--lp-error-bg);
+  color: #ef4444;
+  border: 1px solid var(--lp-error-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.lp-danger-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.lp-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lp-history-item {
+  padding: 16px;
+  border: 1px solid var(--lp-border);
+  border-radius: 8px;
+  background: var(--lp-bg);
+}
+
+.lp-history-date {
+  font-size: 12px;
+  color: var(--lp-text-muted);
+  margin-bottom: 8px;
+}
+
+.lp-history-original {
+  font-size: 14px;
+  color: var(--lp-text-secondary);
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--lp-border);
+}
+
+.lp-history-result {
+  font-size: 14px;
+  color: var(--lp-text-primary);
+}
+
+.lp-empty-state {
+  text-align: center;
+  padding: 32px;
+  color: var(--lp-text-muted);
+  font-size: 14px;
+}

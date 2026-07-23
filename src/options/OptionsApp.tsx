@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
-import { getSettings, setSettings } from "../shared/storage";
-import { testApiKey } from "../shared/mistral/client";
+import { getSettings, setSettings, getHistory, clearHistory } from "../shared/storage";
+import { testApiKey } from "../shared/llm/client";
 import { clearTranslationCache } from "../shared/cache";
 import {
-  MISTRAL_MODELS,
+  PROVIDERS,
+  MODELS,
   FALLBACK_PROVIDERS,
   UI_STRINGS,
 } from "../shared/constants";
-import type { Settings } from "../shared/types";
+import type { Settings, ProviderID, HistoryEntry } from "../shared/types";
 
 function applyThemeClass(theme: "light" | "dark" | "system") {
   const isDark =
@@ -22,19 +23,13 @@ function applyThemeClass(theme: "light" | "dark" | "system") {
 }
 
 export default function OptionsApp() {
-  const [settings, setLocalSettings] = useState<Settings>({
-    mistralApiKey: "",
-    selectedModel: "mistral-small-latest",
-    defaultTargetLanguage: "ru",
-    llmEnabled: true,
-    fallbackProvider: "none",
-    libreTranslateEndpoint: "",
-    excludedSites: [],
-    theme: "system",
-  });
-  const [keyStatus, setKeyStatus] = useState<
-    "idle" | "checking" | "valid" | "invalid"
-  >("idle");
+  const [activeTab, setActiveTab] = useState<"providers" | "translation" | "history">("providers");
+  const [settings, setLocalSettings] = useState<Settings | null>(null);
+  
+  // Key testing state
+  const [keyStatuses, setKeyStatuses] = useState<Record<string, "valid" | "invalid" | "checking">>({});
+  
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [excludedInput, setExcludedInput] = useState("");
   const [saved, setSaved] = useState(false);
   const [cacheCleared, setCacheCleared] = useState(false);
@@ -44,6 +39,7 @@ export default function OptionsApp() {
       setLocalSettings(s);
       applyThemeClass(s.theme);
     });
+    getHistory().then(setHistory);
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {
@@ -55,27 +51,58 @@ export default function OptionsApp() {
 
   const updateSetting = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {
+      if (!settings) return;
       const updated = { ...settings, [key]: value };
       setLocalSettings(updated);
     },
     [settings],
   );
 
+  const updateProviderSetting = useCallback(
+    (provider: ProviderID, key: "apiKeys" | "selectedModel", value: string) => {
+      if (!settings) return;
+      const updated = {
+        ...settings,
+        providers: {
+          ...settings.providers,
+          [provider]: {
+            ...settings.providers[provider],
+            [key]: value
+          }
+        }
+      };
+      setLocalSettings(updated);
+    },
+    [settings],
+  );
+
   const handleSave = useCallback(async () => {
+    if (!settings) return;
     await setSettings(settings);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }, [settings]);
 
-  const handleCheckKey = useCallback(async () => {
-    setKeyStatus("checking");
-    try {
-      await testApiKey(settings.mistralApiKey, settings.selectedModel);
-      setKeyStatus("valid");
-    } catch {
-      setKeyStatus("invalid");
+  const handleCheckKeys = useCallback(async () => {
+    if (!settings) return;
+    const provider = settings.activeProvider;
+    const keys = settings.providers[provider].apiKeys.split(/[\n,]+/).map(k => k.trim()).filter(Boolean);
+    
+    if (keys.length === 0) return;
+
+    const newStatuses: Record<string, "checking"> = {};
+    keys.forEach(k => newStatuses[k] = "checking");
+    setKeyStatuses(newStatuses);
+
+    for (const key of keys) {
+      try {
+        await testApiKey(provider, key, settings.providers[provider].selectedModel);
+        setKeyStatuses(prev => ({ ...prev, [key]: "valid" }));
+      } catch {
+        setKeyStatuses(prev => ({ ...prev, [key]: "invalid" }));
+      }
     }
-  }, [settings.mistralApiKey, settings.selectedModel]);
+  }, [settings]);
 
   const handleClearCache = useCallback(async () => {
     await clearTranslationCache();
@@ -83,210 +110,205 @@ export default function OptionsApp() {
     setTimeout(() => setCacheCleared(false), 2000);
   }, []);
 
-  const addExcludedSite = useCallback(() => {
-    if (!excludedInput.trim()) return;
-    if (settings.excludedSites.includes(excludedInput.trim())) {
-      setExcludedInput("");
-      return;
+  const handleClearHistory = useCallback(async () => {
+    if (confirm("Вы уверены, что хотите очистить историю?")) {
+      await clearHistory();
+      setHistory([]);
     }
-    const sites = [...settings.excludedSites, excludedInput.trim()];
-    updateSetting("excludedSites", sites);
-    setExcludedInput("");
-  }, [excludedInput, settings.excludedSites, updateSetting]);
+  }, []);
 
-  const removeExcludedSite = useCallback(
-    (site: string) => {
-      const sites = settings.excludedSites.filter((s) => s !== site);
-      updateSetting("excludedSites", sites);
-    },
-    [settings.excludedSites, updateSetting],
-  );
+  if (!settings) return null;
+
+  const currentProviderConfig = settings.providers[settings.activeProvider];
 
   return (
     <div className="lp-options-page">
-      <div className="lp-options-card">
+      <div className="lp-options-card" style={{ maxWidth: '800px' }}>
         <h1>LinguaPop AI — Настройки</h1>
-        <div className="lp-options-subtitle">
-          Настройте API ключ, модель и параметры перевода
+        <div className="lp-options-subtitle">Умный переводчик и помощник</div>
+
+        <div className="lp-tabs">
+          <button className={activeTab === "providers" ? "active" : ""} onClick={() => setActiveTab("providers")}>Провайдеры ИИ</button>
+          <button className={activeTab === "translation" ? "active" : ""} onClick={() => setActiveTab("translation")}>Настройки перевода</button>
+          <button className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}>История помощника</button>
         </div>
 
-        <section>
-          <h2>{UI_STRINGS.apiKeyLabel}</h2>
-          <div className="lp-help-text">
-            Получить API ключи можно в консоли Mistral (
-            <a
-              href="https://console.mistral.ai/api-keys/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              console.mistral.ai
-            </a>
-            ).
-            <br />
-            Можно указать несколько ключей (каждый с новой строки или через
-            запятую). Если лимит одного ключа исчерпан, расширение автоматически
-            перейдет к следующему.
+        {activeTab === "providers" && (
+          <div className="lp-tab-content">
+            <section>
+              <h2>Режим перевода (LLM)</h2>
+              <label className="lp-switch-label">
+                <span className="lp-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.llmEnabled}
+                    onChange={(e) => updateSetting("llmEnabled", e.target.checked)}
+                  />
+                  <span className="lp-slider" />
+                </span>
+                <span className="lp-switch-text">
+                  {settings.llmEnabled ? "Использовать нейросети (LLM)" : "LLM отключён"}
+                </span>
+              </label>
+            </section>
+
+            <section>
+              <h2>Активный провайдер</h2>
+              <select
+                value={settings.activeProvider}
+                onChange={(e) => updateSetting("activeProvider", e.target.value as ProviderID)}
+              >
+                {PROVIDERS.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </section>
+
+            <section>
+              <h2>API ключи для {PROVIDERS.find(p => p.id === settings.activeProvider)?.name}</h2>
+              <div className="lp-help-text">
+                Можно указать несколько ключей (каждый с новой строки или через запятую).
+              </div>
+              <div className="lp-key-row">
+                <textarea
+                  value={currentProviderConfig.apiKeys}
+                  onChange={(e) => updateProviderSetting(settings.activeProvider, "apiKeys", e.target.value)}
+                  placeholder="Вставьте API ключи..."
+                  rows={4}
+                />
+                <button onClick={handleCheckKeys}>Проверить ключи</button>
+              </div>
+              
+              <div className="lp-key-statuses">
+                {currentProviderConfig.apiKeys.split(/[\n,]+/).map(k => k.trim()).filter(Boolean).map(key => {
+                  const status = keyStatuses[key];
+                  const masked = key.slice(0, 4) + "..." + key.slice(-4);
+                  return (
+                    <div key={key} className={`lp-status-item ${status || ""}`}>
+                      <span>{masked}</span>
+                      {status === "checking" && <span className="lp-badge checking">Проверка...</span>}
+                      {status === "valid" && <span className="lp-badge valid">Работает</span>}
+                      {status === "invalid" && <span className="lp-badge invalid">Ошибка</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section>
+              <h2>Модель</h2>
+              <select
+                value={currentProviderConfig.selectedModel}
+                onChange={(e) => updateProviderSetting(settings.activeProvider, "selectedModel", e.target.value)}
+              >
+                {MODELS[settings.activeProvider].map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </section>
+
+            <section>
+              <h2>Fallback-переводчик (запасной)</h2>
+              <div className="lp-help-text">
+                Chrome Built-in AI попытается использовать локальную нейросеть браузера, если основной API недоступен.
+              </div>
+              <select
+                value={settings.fallbackProvider}
+                onChange={(e) => updateSetting("fallbackProvider", e.target.value as Settings["fallbackProvider"])}
+              >
+                <option value="none">Не использовать</option>
+                {FALLBACK_PROVIDERS.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </section>
           </div>
-          <div className="lp-key-row">
-            <textarea
-              value={settings.mistralApiKey}
-              onChange={(e) => updateSetting("mistralApiKey", e.target.value)}
-              placeholder="Вставьте API ключи Mistral..."
-              rows={3}
-            />
-            <button
-              onClick={handleCheckKey}
-              disabled={keyStatus === "checking"}
-            >
-              {keyStatus === "checking" ? "Проверка..." : UI_STRINGS.checkKey}
-            </button>
+        )}
+
+        {activeTab === "translation" && (
+          <div className="lp-tab-content">
+            <section>
+              <h2>Язык перевода (Обычный)</h2>
+              <select
+                value={settings.defaultTargetLanguage}
+                onChange={(e) => updateSetting("defaultTargetLanguage", e.target.value as "ru" | "en")}
+              >
+                <option value="ru">Русский (автоопределение исходного)</option>
+                <option value="en">English</option>
+              </select>
+            </section>
+
+            <section>
+              <h2>Язык для помощника при письме</h2>
+              <select
+                value={settings.writingAssistantTargetLanguage}
+                onChange={(e) => updateSetting("writingAssistantTargetLanguage", e.target.value)}
+              >
+                <option value="en">English (по умолчанию)</option>
+                <option value="ru">Русский</option>
+                <option value="es">Испанский</option>
+                <option value="de">Немецкий</option>
+                <option value="fr">Французский</option>
+                <option value="zh">Китайский</option>
+              </select>
+            </section>
+
+            <section>
+              <h2>Тема оформления</h2>
+              <select
+                value={settings.theme}
+                onChange={(e) => {
+                  const val = e.target.value as Settings["theme"];
+                  updateSetting("theme", val);
+                  applyThemeClass(val);
+                }}
+              >
+                <option value="system">Системная</option>
+                <option value="light">Светлая</option>
+                <option value="dark">Тёмная</option>
+              </select>
+            </section>
+
+            <section>
+              <h2>Кэш переводов</h2>
+              <div className="lp-key-row">
+                <input
+                  type="text"
+                  value={cacheCleared ? "Кэш очищен!" : "Кэш хранит переводы 24 часа"}
+                  readOnly
+                  style={{ color: cacheCleared ? "#16a34a" : undefined }}
+                />
+                <button onClick={handleClearCache}>Очистить кэш</button>
+              </div>
+            </section>
           </div>
-          {keyStatus === "valid" && (
-            <div className="lp-status valid">{UI_STRINGS.keyWorks}</div>
-          )}
-          {keyStatus === "invalid" && (
-            <div className="lp-status invalid">{UI_STRINGS.invalidKey}</div>
-          )}
-        </section>
+        )}
 
-        <section>
-          <h2>Модель Mistral</h2>
-          <select
-            value={settings.selectedModel}
-            onChange={(e) => updateSetting("selectedModel", e.target.value)}
-          >
-            {MISTRAL_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </section>
-
-        <section>
-          <h2>Язык перевода по умолчанию</h2>
-          <select
-            value={settings.defaultTargetLanguage}
-            onChange={(e) =>
-              updateSetting(
-                "defaultTargetLanguage",
-                e.target.value as "ru" | "en",
-              )
-            }
-          >
-            <option value="ru">Русский</option>
-            <option value="en">English</option>
-          </select>
-        </section>
-
-        <section>
-          <h2>Режим перевода</h2>
-          <label className="lp-switch-label">
-            <span className="lp-switch">
-              <input
-                type="checkbox"
-                checked={settings.llmEnabled}
-                onChange={(e) => updateSetting("llmEnabled", e.target.checked)}
-              />
-              <span className="lp-slider" />
-            </span>
-            <span className="lp-switch-text">
-              {settings.llmEnabled
-                ? "Использовать LLM (Mistral)"
-                : "LLM отключён"}
-            </span>
-          </label>
-        </section>
-
-        <section>
-          <h2>Fallback-переводчик</h2>
-          <select
-            value={settings.fallbackProvider}
-            onChange={(e) =>
-              updateSetting(
-                "fallbackProvider",
-                e.target.value as Settings["fallbackProvider"],
-              )
-            }
-          >
-            <option value="none">Не использовать</option>
-            {FALLBACK_PROVIDERS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </section>
-
-        <section>
-          <h2>LibreTranslate endpoint (опционально)</h2>
-          <input
-            type="text"
-            value={settings.libreTranslateEndpoint}
-            onChange={(e) =>
-              updateSetting("libreTranslateEndpoint", e.target.value)
-            }
-            placeholder="https://libretranslate.de"
-          />
-        </section>
-
-        <section>
-          <h2>Исключённые сайты</h2>
-          <div className="lp-excluded-row">
-            <input
-              type="text"
-              value={excludedInput}
-              onChange={(e) => setExcludedInput(e.target.value)}
-              placeholder="example.com"
-              onKeyDown={(e) => e.key === "Enter" && addExcludedSite()}
-            />
-            <button onClick={addExcludedSite}>Добавить</button>
+        {activeTab === "history" && (
+          <div className="lp-tab-content">
+            <section>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ margin: 0 }}>История переписывания</h2>
+                <button onClick={handleClearHistory} className="lp-danger-btn">Очистить историю</button>
+              </div>
+              <div className="lp-history-list">
+                {history.length === 0 ? (
+                  <div className="lp-empty-state">История пуста. Используйте помощник при письме на любой странице.</div>
+                ) : (
+                  history.map(item => (
+                    <div key={item.id} className="lp-history-item">
+                      <div className="lp-history-date">{new Date(item.timestamp).toLocaleString()}</div>
+                      <div className="lp-history-original"><strong>Оригинал:</strong> {item.originalText}</div>
+                      <div className="lp-history-result"><strong>Результат:</strong> {item.rewrittenText}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
           </div>
-          <div className="lp-excluded-list">
-            {settings.excludedSites.map((site) => (
-              <span key={site} className="lp-excluded-tag">
-                {site}
-                <button
-                  onClick={() => removeExcludedSite(site)}
-                  title="Удалить"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        </section>
-
-        <section>
-          <h2>Тема оформления</h2>
-          <select
-            value={settings.theme}
-            onChange={(e) => {
-              const val = e.target.value as Settings["theme"];
-              updateSetting("theme", val);
-              applyThemeClass(val);
-            }}
-          >
-            <option value="system">Системная</option>
-            <option value="light">Светлая</option>
-            <option value="dark">Тёмная</option>
-          </select>
-        </section>
-
-        <section>
-          <h2>Кэш переводов</h2>
-          <div className="lp-key-row">
-            <input
-              type="text"
-              value={
-                cacheCleared ? "Кэш очищен!" : "Кэш хранит переводы 24 часа"
-              }
-              readOnly
-              style={{ color: cacheCleared ? "#16a34a" : undefined }}
-            />
-            <button onClick={handleClearCache}>Очистить кэш</button>
-          </div>
-        </section>
+        )}
 
         <div className="lp-save-row">
           <button className="lp-save-btn" onClick={handleSave}>

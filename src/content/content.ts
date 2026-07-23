@@ -1300,12 +1300,29 @@ function hideWriteFab() {
 
 function updateWriteFabPosition() {
   if (!writeFab || !currentInputTarget) return;
-  const rect = currentInputTarget.getBoundingClientRect();
+  
+  // Find the outermost contenteditable container to get the true boundaries
+  let targetNode = currentInputTarget;
+  if (targetNode.isContentEditable) {
+    let current = targetNode.parentElement;
+    while (current && current.isContentEditable) {
+      targetNode = current;
+      current = current.parentElement;
+    }
+  }
+
+  const rect = targetNode.getBoundingClientRect();
   const htmlRect = document.documentElement.getBoundingClientRect();
   
-  // Bottom-right corner of the input
-  const top = rect.bottom - htmlRect.top - 32;
-  const left = rect.right - htmlRect.left - 32;
+  // Place outside the input: below it, aligned to the right edge
+  let top = rect.bottom - htmlRect.top + 6; // 6px gap below
+  const left = rect.right - htmlRect.left - 28; // right-aligned (28px is fab width)
+  
+  // If placing it below pushes it off-screen, place it above the input
+  const maxTop = window.scrollY + window.innerHeight - 34;
+  if (top > maxTop) {
+    top = rect.top - htmlRect.top - 28 - 6; 
+  }
   
   writeFab.style.top = `${top}px`;
   writeFab.style.left = `${left}px`;

@@ -2,9 +2,15 @@
   "manifest_version": 3,
   "name": "LinguaPop AI",
   "version": "1.0.0",
-  "description": "Умный ИИ-переводчик: словари, контекстный перевод, стриминг страниц и ИИ-помощник при письме (на базе Mistral).",
+  "description": "Умный ИИ-переводчик и помощник: точный контекстный перевод, перевод страниц и улучшение текста на базе нейросетей (OpenAI, Claude, Gemini, Mistral).",
   "permissions": ["storage", "activeTab", "contextMenus"],
-  "host_permissions": ["https://api.mistral.ai/*", "https://translate.google.com/*"],
+  "host_permissions": [
+    "https://api.mistral.ai/*", 
+    "https://api.openai.com/*", 
+    "https://api.anthropic.com/*", 
+    "https://generativelanguage.googleapis.com/*", 
+    "https://translate.google.com/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"

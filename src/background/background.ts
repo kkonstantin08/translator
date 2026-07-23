@@ -1,5 +1,5 @@
 import { translate } from "../shared/translation/service";
-import { testApiKey } from "../shared/mistral/client";
+import { testApiKey } from "../shared/llm/client";
 import type { TranslationRequest } from "../shared/types";
 
 chrome.runtime.onInstalled.addListener(() => {

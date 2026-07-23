@@ -1,12 +1,12 @@
-import { callMistral } from "../mistral/client";
+import { callLLM } from "../llm/client";
 import {
   buildWordPrompt,
   buildPhrasePrompt,
   buildPopupPrompt,
   buildBatchPrompt,
   buildRewritePrompt,
-} from "../mistral/prompts";
-import { getSettings } from "../storage";
+} from "../llm/prompts";
+import { getSettings, addHistoryEntry } from "../storage";
 import { translateWithFallback } from "./fallback";
 import { getCachedTranslation, setCachedTranslation } from "../cache";
 import type {
@@ -52,7 +52,7 @@ export async function translate(
   } else if (request.mode === "batch") {
     prompt = buildBatchPrompt(request.text, settings.defaultTargetLanguage);
   } else if (request.mode === "rewrite") {
-    prompt = buildRewritePrompt(request.text);
+    prompt = buildRewritePrompt(request.text, settings.writingAssistantTargetLanguage);
   } else {
     prompt = buildPopupPrompt(
       request.text,
@@ -61,9 +61,22 @@ export async function translate(
     );
   }
 
-  const content = await callMistral(prompt, {
-    model: settings.selectedModel,
-  });
+  let content: string;
+  try {
+    content = await callLLM(prompt);
+  } catch (error) {
+    // Smart Fallback to Chrome AI
+    if (typeof window !== "undefined" && (window as any).ai && (window as any).ai.languageModel) {
+      try {
+        const session = await (window as any).ai.languageModel.create();
+        content = await session.prompt(prompt);
+      } catch (aiError) {
+        throw error; // Throw original LLM error if fallback fails
+      }
+    } else {
+      throw error;
+    }
+  }
 
   // Clean up potential markdown formatting
   let cleanContent = content.trim();
@@ -125,6 +138,17 @@ export async function translate(
     request.sourceLanguage,
     request.targetLanguage,
   );
+
+  // Save history for writing assistant
+  if (request.mode === "rewrite" && 'translation' in result) {
+    await addHistoryEntry({
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      originalText: request.text,
+      rewrittenText: result.translation,
+      targetLanguage: result.targetLanguage || settings.writingAssistantTargetLanguage,
+    });
+  }
 
   return result;
 }

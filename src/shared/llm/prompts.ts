@@ -112,18 +112,18 @@ Rules:
 
 export function buildRewritePrompt(
   text: string,
+  targetLang: string,
 ): string {
   const detected = detectLanguage(text);
-  const target = detected === "en" ? "Russian" : "English";
 
-  return `You are a professional writing assistant. Translate or rewrite the following text into natural, native-sounding ${target}. 
+  return `You are a professional writing assistant. Translate or rewrite the following text into natural, native-sounding ${targetLang}. 
 
 Text: "${text}"
 
 Return ONLY a valid JSON object:
 {
   "detectedLanguage": "${detected}",
-  "targetLanguage": "${target === "Russian" ? "ru" : "en"}",
+  "targetLanguage": "${targetLang === "Russian" || targetLang === "ru" ? "ru" : "en"}",
   "translation": "..."
 }
 
