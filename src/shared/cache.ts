@@ -22,10 +22,11 @@ function buildKey(
   mode: string,
   sourceLang?: string,
   targetLang?: string,
+  tone?: string,
 ): string {
   const hash = hashString(text);
   const snippet = text.trim().toLowerCase().slice(0, 30).replace(/[^a-z0-9а-яё]/g, "");
-  return `${mode}_${sourceLang || "auto"}_${targetLang || "default"}_${snippet}_${hash}`;
+  return `${mode}_${sourceLang || "auto"}_${targetLang || "default"}_${tone || "none"}_${snippet}_${hash}`;
 }
 
 export async function getCachedTranslation(
@@ -33,9 +34,10 @@ export async function getCachedTranslation(
   mode: string,
   sourceLang?: string,
   targetLang?: string,
+  tone?: string,
 ): Promise<unknown | null> {
   try {
-    const key = CACHE_PREFIX + buildKey(text, mode, sourceLang, targetLang);
+    const key = CACHE_PREFIX + buildKey(text, mode, sourceLang, targetLang, tone);
     const result = await chrome.storage.local.get(key);
     const entry = result[key] as CacheEntry | undefined;
 
@@ -61,9 +63,10 @@ export async function setCachedTranslation(
   result: unknown,
   sourceLang?: string,
   targetLang?: string,
+  tone?: string,
 ): Promise<void> {
   try {
-    const key = CACHE_PREFIX + buildKey(text, mode, sourceLang, targetLang);
+    const key = CACHE_PREFIX + buildKey(text, mode, sourceLang, targetLang, tone);
     const entry: CacheEntry = {
       key,
       result,

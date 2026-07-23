@@ -27,6 +27,7 @@ export async function translate(
     request.mode,
     request.sourceLanguage,
     request.targetLanguage,
+    request.tone,
   );
   if (cached) {
     return cached as TranslationResult;
@@ -40,6 +41,7 @@ export async function translate(
       result,
       request.sourceLanguage,
       request.targetLanguage,
+      request.tone,
     );
     return result;
   }
@@ -137,6 +139,7 @@ export async function translate(
     result,
     request.sourceLanguage,
     request.targetLanguage,
+    request.tone,
   );
 
   // Save history for writing assistant
