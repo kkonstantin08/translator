@@ -429,6 +429,22 @@ body {
   color: #ef4444;
 }
 
+.lp-btn {
+  padding: 8px 16px;
+  background: var(--lp-input-bg);
+  color: var(--lp-text-primary);
+  border: 1px solid var(--lp-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.lp-btn:hover {
+  background: var(--lp-tag-bg);
+  border-color: var(--lp-border-hover);
+}
+
 .lp-danger-btn {
   padding: 8px 16px;
   background: var(--lp-error-bg);
