@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getSettings, setSettings, getHistory, clearHistory } from "../shared/storage";
 import { testApiKey } from "../shared/llm/client";
 import { clearTranslationCache } from "../shared/cache";
@@ -25,6 +25,7 @@ function applyThemeClass(theme: "light" | "dark" | "system") {
 export default function OptionsApp() {
   const [activeTab, setActiveTab] = useState<"providers" | "translation" | "history">("providers");
   const [settings, setLocalSettings] = useState<Settings | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Key testing state
   const [keyStatuses, setKeyStatuses] = useState<Record<string, "valid" | "invalid" | "checking">>({});
@@ -49,13 +50,23 @@ export default function OptionsApp() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  const triggerSave = useCallback((updatedSettings: Settings) => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      await setSettings(updatedSettings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }, 600);
+  }, []);
+
   const updateSetting = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {
       if (!settings) return;
       const updated = { ...settings, [key]: value };
       setLocalSettings(updated);
+      triggerSave(updated);
     },
-    [settings],
+    [settings, triggerSave],
   );
 
   const updateProviderSetting = useCallback(
@@ -72,16 +83,10 @@ export default function OptionsApp() {
         }
       };
       setLocalSettings(updated);
+      triggerSave(updated);
     },
-    [settings],
+    [settings, triggerSave],
   );
-
-  const handleSave = useCallback(async () => {
-    if (!settings) return;
-    await setSettings(settings);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }, [settings]);
 
   const handleCheckKeys = useCallback(async () => {
     if (!settings) return;
@@ -310,10 +315,8 @@ export default function OptionsApp() {
           </div>
         )}
 
-        <div className="lp-save-row">
-          <button className="lp-save-btn" onClick={handleSave}>
-            {saved ? "Сохранено!" : "Сохранить настройки"}
-          </button>
+        <div className="lp-save-row" style={{ height: '36px', alignItems: 'center' }}>
+          {saved && <span style={{ color: '#16a34a', fontWeight: 600 }}>✓ Автоматически сохранено</span>}
         </div>
       </div>
     </div>
