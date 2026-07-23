@@ -113,8 +113,21 @@ Rules:
 export function buildRewritePrompt(
   text: string,
   targetLang: string,
+  tone?: "normal" | "formal" | "friendly" | "shorter" | "grammar_only"
 ): string {
   const detected = detectLanguage(text);
+
+  let toneInstruction = "- If the text is informal, keep it informal but natural.\\n- If it's formal, keep it formal.";
+  
+  if (tone === "formal") {
+    toneInstruction = "- Make the tone strictly formal, professional, and polite. Use advanced vocabulary.";
+  } else if (tone === "friendly") {
+    toneInstruction = "- Make the tone highly friendly, casual, and enthusiastic.";
+  } else if (tone === "shorter") {
+    toneInstruction = "- Summarize or rephrase the text to be significantly shorter and more concise while keeping the main point.";
+  } else if (tone === "grammar_only") {
+    toneInstruction = "- ONLY fix grammar, punctuation, and typos. Keep the original style intact. Do NOT change the meaning or rewrite the text heavily.";
+  }
 
   return `You are a professional writing assistant. Translate or rewrite the following text into natural, native-sounding ${targetLang}. 
 
@@ -128,8 +141,7 @@ Return ONLY a valid JSON object:
 }
 
 Rules:
-- If the text is informal, keep it informal but natural.
-- If it's formal, keep it formal.
+${toneInstruction}
 - Fix any typos or grammar issues while translating.
 - No explanations outside the JSON.
 - IMPORTANT: For paragraphs, use double newlines. Strictly escape all newlines as \\\\n.`;

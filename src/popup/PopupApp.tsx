@@ -18,6 +18,17 @@ function applyThemeClass(theme: "light" | "dark" | "system") {
   }
 }
 
+function applyAccentColor(color: Settings["accentColor"]) {
+  const colorMap: Record<string, string> = {
+    pink: "#df37a7",
+    blue: "#3b82f6",
+    green: "#10b981",
+    purple: "#8b5cf6",
+    orange: "#f97316"
+  };
+  document.documentElement.style.setProperty('--lp-primary', colorMap[color || "pink"]);
+}
+
 export default function PopupApp() {
   const [input, setInput] = useState("");
   const [result, setResult] = useState("");
@@ -32,6 +43,7 @@ export default function PopupApp() {
     getSettings().then((s) => {
       setLocalSettings(s);
       applyThemeClass(s.theme);
+      applyAccentColor(s.accentColor);
     });
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

@@ -52,7 +52,7 @@ export async function translate(
   } else if (request.mode === "batch") {
     prompt = buildBatchPrompt(request.text, settings.defaultTargetLanguage);
   } else if (request.mode === "rewrite") {
-    prompt = buildRewritePrompt(request.text, settings.writingAssistantTargetLanguage);
+    prompt = buildRewritePrompt(request.text, settings.writingAssistantTargetLanguage, request.tone);
   } else {
     prompt = buildPopupPrompt(
       request.text,

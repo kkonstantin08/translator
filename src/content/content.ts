@@ -6,6 +6,42 @@ import type {
 import TurndownService from "turndown";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import { getSettings } from "../shared/storage";
+
+let currentAccentColor = "#df37a7";
+
+function updateContentAccentColor() {
+  getSettings().then(s => {
+    const colorMap: Record<string, string> = {
+      pink: "#df37a7",
+      blue: "#3b82f6",
+      green: "#10b981",
+      purple: "#8b5cf6",
+      orange: "#f97316"
+    };
+    currentAccentColor = colorMap[s.accentColor || "pink"];
+    
+    // Apply to shadow root host if it exists
+    const host = document.getElementById("linguapop-host");
+    if (host) {
+      host.style.setProperty("--lp-primary", currentAccentColor);
+    }
+
+    // Apply to writing assistant FAB if it exists
+    const fab = document.querySelector(".lp-fab") as HTMLElement;
+    if (fab) {
+      fab.style.setProperty("--lp-primary", currentAccentColor);
+    }
+  });
+}
+
+// Update color on init and when settings change
+updateContentAccentColor();
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.settings) {
+    updateContentAccentColor();
+  }
+});
 
 const turndownService = new TurndownService({
   headingStyle: "atx",
@@ -139,7 +175,7 @@ const POPUP_CSS = `
 .lp-fab {
   position: absolute;
   z-index: 2147483646;
-  background: #df37a7;
+  background: var(--lp-primary);
   color: #fff;
   border: none;
   border-radius: 20px;
@@ -158,7 +194,7 @@ const POPUP_CSS = `
 .lp-spinner {
   width: 16px; height: 16px;
   border: 2px solid #d4ccd4;
-  border-top-color: #df37a7;
+  border-top-color: var(--lp-primary);
   border-radius: 50%;
   animation: lp-spin 0.8s linear infinite;
 }
@@ -183,7 +219,7 @@ const POPUP_CSS = `
 .lp-pos { font-size: 12px; color: #6d526d; text-transform: lowercase; background: #f5f0f5; padding: 2px 8px; border-radius: 10px; }
 .lp-pronunciation { font-size: 13px; color: #6d526d; margin-bottom: 8px; font-style: italic; }
 .lp-result-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding-right: 20px; }
-.lp-main-translation { font-size: 16px; font-weight: 600; color: #df37a7; flex: 1; min-width: 0; }
+.lp-main-translation { font-size: 16px; font-weight: 600; color: var(--lp-primary); flex: 1; min-width: 0; }
 .lp-phrase-translation { font-size: 15px; color: #333; line-height: 1.6; flex: 1; min-width: 0; }
 .lp-phrase-translation p { margin-bottom: 8px; }
 .lp-phrase-translation p:last-child { margin-bottom: 0; }
@@ -213,7 +249,7 @@ const POPUP_CSS = `
 .lp-alternatives { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .lp-alt { background: #f8f0f8; color: #6d526d; padding: 3px 10px; border-radius: 12px; font-size: 12px; border: 1px solid #ece5ec; }
 .lp-examples { margin-bottom: 12px; }
-.lp-example { padding: 8px 10px; background: #faf8fa; border-radius: 8px; margin-bottom: 6px; font-size: 13px; border-left: 3px solid #df37a7; }
+.lp-example { padding: 8px 10px; background: #faf8fa; border-radius: 8px; margin-bottom: 6px; font-size: 13px; border-left: 3px solid var(--lp-primary); }
 .lp-example div:first-child { color: #333; margin-bottom: 2px; }
 .lp-example div:last-child { color: #6d526d; }
 .lp-actions { display: none; }
@@ -330,6 +366,10 @@ function getOrCreateShadowRoot(): ShadowRoot {
     existing?.remove();
   }
   currentHost = createHost();
+  
+  // Apply accent color to new host
+  currentHost.style.setProperty("--lp-primary", currentAccentColor);
+  
   const shadow = currentHost.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = POPUP_CSS;
@@ -1328,8 +1368,18 @@ function updateWriteFabPosition() {
   writeFab.style.left = `${left}px`;
 }
 
+let writeMenu: HTMLDivElement | null = null;
+
+function hideWriteMenu() {
+  if (writeMenu && writeMenu.parentNode) {
+    writeMenu.parentNode.removeChild(writeMenu);
+  }
+  writeMenu = null;
+}
+
 function showWriteFab(target: HTMLElement) {
   hideWriteFab();
+  hideWriteMenu();
   currentInputTarget = target;
   
   writeFab = document.createElement("button");
@@ -1337,7 +1387,7 @@ function showWriteFab(target: HTMLElement) {
   writeFab.style.cssText = `
     position: absolute;
     z-index: 2147483645;
-    background: #df37a7;
+    background: var(--lp-primary, #df37a7);
     color: #fff;
     border: none;
     border-radius: 50%;
@@ -1359,11 +1409,10 @@ function showWriteFab(target: HTMLElement) {
     if (writeFab) writeFab.style.opacity = "1";
   });
   writeFab.addEventListener("mouseleave", () => {
-    if (writeFab) writeFab.style.opacity = "0.6";
+    if (writeFab && !writeMenu) writeFab.style.opacity = "0.6";
   });
 
   writeFab.addEventListener("mousedown", (e) => {
-    // Prevent blurring the input
     e.preventDefault(); 
     e.stopPropagation();
   });
@@ -1375,39 +1424,113 @@ function showWriteFab(target: HTMLElement) {
     if (!currentInputTarget) return;
     const text = getTextInputValue(currentInputTarget).trim();
     if (!text) return;
-    
-    // Show loading state
-    const originalIcon = writeFab!.innerHTML;
-    writeFab!.innerHTML = '<div class="lp-spinner" style="width:14px;height:14px;border-width:2px;border-color:rgba(255,255,255,0.3);border-top-color:white;"></div>';
-    writeFab!.style.opacity = "1";
-    writeFab!.style.pointerEvents = "none";
-    
-    safeSendMessage(
-      { type: "TRANSLATE", data: { text, mode: "rewrite" } },
-      (response) => {
-        if (writeFab) {
-          writeFab.innerHTML = originalIcon;
-          writeFab.style.pointerEvents = "auto";
-          writeFab.style.opacity = "0.6";
-        }
-        
-        if (response?.success && response.result) {
-          const res = response.result as PhraseTranslationResult;
-          if (res.translation && currentInputTarget) {
-            const fixed = res.translation.replace(/\\n/g, '\n');
-            setTextInputValue(currentInputTarget, fixed);
-            
-            // Flash green to indicate success
-            if (writeFab) {
-              writeFab.style.background = "#10b981";
-              writeFab.style.boxShadow = "0 4px 12px rgba(16, 185, 129, 0.4)";
-              writeFab.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
-              setTimeout(() => {
-                if (writeFab) {
-                  writeFab.style.background = "#df37a7";
-                  writeFab.style.boxShadow = "0 4px 12px rgba(223, 55, 167, 0.3)";
-                  writeFab.innerHTML = ICONS.translate;
-                }
+
+    if (writeMenu) {
+      hideWriteMenu();
+      return;
+    }
+
+    const rect = writeFab!.getBoundingClientRect();
+    writeMenu = document.createElement("div");
+    writeMenu.style.cssText = `
+      position: absolute;
+      z-index: 2147483646;
+      top: ${rect.bottom + window.scrollY + 8}px;
+      left: ${rect.left + window.scrollX}px;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      width: 180px;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      color: #333;
+      border: 1px solid #eaeaea;
+    `;
+
+    const options: { label: string, tone: "normal" | "formal" | "friendly" | "shorter" | "grammar_only" }[] = [
+      { label: "✨ Обычный перевод", tone: "normal" },
+      { label: "👔 Формальный", tone: "formal" },
+      { label: "👋 Дружелюбный", tone: "friendly" },
+      { label: "✂️ Сделать короче", tone: "shorter" },
+      { label: "✅ Только грамматика", tone: "grammar_only" }
+    ];
+
+    options.forEach(opt => {
+      const btn = document.createElement("button");
+      btn.textContent = opt.label;
+      btn.style.cssText = `
+        background: none;
+        border: none;
+        padding: 8px 12px;
+        text-align: left;
+        cursor: pointer;
+        border-radius: 6px;
+        color: #333;
+        font-family: inherit;
+        font-size: 13px;
+        transition: background 0.15s;
+        width: 100%;
+      `;
+      btn.addEventListener("mouseenter", () => btn.style.background = "#f5f2f5");
+      btn.addEventListener("mouseleave", () => btn.style.background = "none");
+      btn.addEventListener("mousedown", (e) => e.preventDefault()); // Prevent input blur
+      
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        hideWriteMenu();
+        executeRewrite(opt.tone);
+      });
+
+      writeMenu!.appendChild(btn);
+    });
+
+    document.body.appendChild(writeMenu);
+  });
+
+  document.body.appendChild(writeFab);
+  positionWriteFab();
+}
+
+function executeRewrite(tone: "normal" | "formal" | "friendly" | "shorter" | "grammar_only") {
+  if (!currentInputTarget) return;
+  const text = getTextInputValue(currentInputTarget).trim();
+  if (!text) return;
+  
+  const originalIcon = writeFab!.innerHTML;
+  writeFab!.innerHTML = '<div class="lp-spinner" style="width:14px;height:14px;border-width:2px;border-color:rgba(255,255,255,0.3);border-top-color:white;"></div>';
+  writeFab!.style.opacity = "1";
+  writeFab!.style.pointerEvents = "none";
+  
+  safeSendMessage(
+    { type: "TRANSLATE", data: { text, mode: "rewrite", tone } },
+    (response) => {
+      if (writeFab) {
+        writeFab.innerHTML = originalIcon;
+        writeFab.style.pointerEvents = "auto";
+        writeFab.style.opacity = "0.6";
+      }
+      
+      if (response?.success && response.result) {
+        const res = response.result as PhraseTranslationResult;
+        if (res.translation && currentInputTarget) {
+          const fixed = res.translation.replace(/\\n/g, '\\n');
+          setTextInputValue(currentInputTarget, fixed);
+          
+          if (writeFab) {
+            writeFab.style.background = "#10b981";
+            writeFab.style.boxShadow = "0 4px 12px rgba(16, 185, 129, 0.4)";
+            writeFab.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+            setTimeout(() => {
+              if (writeFab) {
+                writeFab.style.background = "var(--lp-primary, #df37a7)";
+                writeFab.style.boxShadow = "0 4px 12px rgba(223, 55, 167, 0.3)";
+                writeFab.innerHTML = ICONS.translate;
+              }
               }, 1500);
             }
           }
@@ -1416,10 +1539,6 @@ function showWriteFab(target: HTMLElement) {
         }
       }
     );
-  });
-
-  document.body.appendChild(writeFab);
-  updateWriteFabPosition();
 }
 
 // Global focus listeners

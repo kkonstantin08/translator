@@ -22,6 +22,17 @@ function applyThemeClass(theme: "light" | "dark" | "system") {
   }
 }
 
+function applyAccentColor(color: Settings["accentColor"]) {
+  const colorMap: Record<string, string> = {
+    pink: "#df37a7",
+    blue: "#3b82f6",
+    green: "#10b981",
+    purple: "#8b5cf6",
+    orange: "#f97316"
+  };
+  document.documentElement.style.setProperty('--lp-primary', colorMap[color || "pink"]);
+}
+
 export default function OptionsApp() {
   const [activeTab, setActiveTab] = useState<"providers" | "translation" | "history">("providers");
   const [settings, setLocalSettings] = useState<Settings | null>(null);
@@ -39,6 +50,7 @@ export default function OptionsApp() {
     getSettings().then((s) => {
       setLocalSettings(s);
       applyThemeClass(s.theme);
+      applyAccentColor(s.accentColor);
     });
     getHistory().then(setHistory);
 
@@ -315,6 +327,37 @@ export default function OptionsApp() {
                 <option value="light">Светлая</option>
                 <option value="dark">Тёмная</option>
               </select>
+            </section>
+
+            <section>
+              <h2>Акцентный цвет</h2>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                {[
+                  { id: "pink", color: "#df37a7" },
+                  { id: "blue", color: "#3b82f6" },
+                  { id: "green", color: "#10b981" },
+                  { id: "purple", color: "#8b5cf6" },
+                  { id: "orange", color: "#f97316" }
+                ].map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      updateSetting("accentColor", c.id as Settings["accentColor"]);
+                      document.documentElement.style.setProperty('--lp-primary', c.color);
+                    }}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: c.color,
+                      border: settings.accentColor === c.id ? '3px solid var(--lp-text-primary)' : '2px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    title={c.id}
+                  />
+                ))}
+              </div>
             </section>
 
             <section>

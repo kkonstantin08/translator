@@ -15,6 +15,7 @@ export interface Settings {
   libreTranslateEndpoint: string;
   excludedSites: string[];
   theme: "light" | "dark" | "system";
+  accentColor: "pink" | "blue" | "green" | "purple" | "orange";
 }
 
 export interface HistoryEntry {
@@ -52,4 +53,5 @@ export interface TranslationRequest {
   mode: "word" | "phrase" | "popup" | "batch" | "rewrite";
   sourceLanguage?: "auto" | "en" | "ru";
   targetLanguage?: "ru" | "en";
+  tone?: "normal" | "formal" | "friendly" | "shorter" | "grammar_only";
 }
