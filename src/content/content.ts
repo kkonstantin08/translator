@@ -1493,7 +1493,7 @@ function showWriteFab(target: HTMLElement) {
   });
 
   document.body.appendChild(writeFab);
-  positionWriteFab();
+  updateWriteFabPosition();
 }
 
 function executeRewrite(tone: "normal" | "formal" | "friendly" | "shorter" | "grammar_only") {
