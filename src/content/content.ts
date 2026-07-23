@@ -1437,11 +1437,19 @@ function showWriteFab(target: HTMLElement) {
       menuLeft = window.innerWidth - 170 - 10 + window.scrollX;
     }
 
+    let menuTop = rect.bottom + window.scrollY + 8;
+    let transform = "none";
+    if (rect.bottom + 190 > window.innerHeight) {
+      menuTop = rect.top + window.scrollY - 8;
+      transform = "translateY(-100%)";
+    }
+
     writeMenu.style.cssText = `
       position: absolute;
       z-index: 2147483646;
-      top: ${rect.bottom + window.scrollY + 8}px;
+      top: ${menuTop}px;
       left: ${menuLeft}px;
+      transform: ${transform};
       background: #ffffff;
       border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
