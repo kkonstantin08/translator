@@ -1,125 +1,80 @@
-# LinguaPop AI 🌍✨
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/hero.gif">
+    <source media="(prefers-color-scheme: light)" srcset="assets/readme/hero.gif">
+    <img alt="LinguaPop AI Hero Image showing text translation" src="assets/readme/hero.svg" width="100%">
+  </picture>
+</div>
 
-**LinguaPop AI** is a next-generation Chromium extension for seamless English ↔ Russian translation and writing assistance. Powered by leading AI models (OpenAI, Anthropic, Gemini, Mistral) and modern web technologies, it provides intelligent context-aware translation, text rewriting, and full-page localization without breaking your browsing experience.
+<p align="center">
+  <strong>An AI-powered Chromium extension for seamless translation, text rewriting, and PDF localization using your own LLM keys.</strong>
+</p>
 
-## ✨ Key Features
+<p align="center">
+  <a href="README.ru.md">🇷🇺 Читать на русском</a>
+</p>
 
-* **🤖 Multi-LLM Support:** Choose your preferred AI provider! LinguaPop natively supports OpenAI (ChatGPT), Anthropic (Claude), Google (Gemini), and Mistral. Bring your own API keys.
-* **⚡ Smart Fallback (Chrome Built-in AI):** If your primary API key runs out or the network drops, LinguaPop can automatically fall back to Chrome's local, built-in AI models (Nano) to ensure you never lose translation capabilities.
-* **✍️ AI Writing Assistant:** Click the floating LinguaPop button inside any `<textarea>` or input field. Write in your native language, and the AI will rewrite it into perfect, native-sounding English (or another chosen language), instantly replacing the text right in the input box!
-  * **Selectable Tones:** Choose between Normal, Formal, Friendly, Shorter, or Grammar-only corrections to match your context perfectly.
-* **📄 Built-in PDF Reader:** Native support for rendering and translating text directly inside local and remote PDF files. Just right-click any PDF link and select **Открыть в LinguaPop PDF**.
-* **📖 Smart Dictionary (Single Word):** Highlight any word to instantly see a rich popup with alternatives, part of speech, pronunciation (IPA), and contextual examples.
-* **📝 Contextual Phrase Translation:** Highlight sentences or paragraphs. The model translates them with high accuracy, preserving the original tone and Markdown formatting.
+---
+
+**LinguaPop AI** brings the power of state-of-the-art language models directly into your browser. Instead of switching tabs to translate a phrase or rewrite an email, LinguaPop sits inline—offering context-aware translation, text polishing, and full-page streaming localization directly in the inputs and pages you are already using.
+
+## ✨ Why LinguaPop?
+
+Most translation extensions rely on standard neural machine translation (like Google Translate). LinguaPop connects directly to the best LLMs (OpenAI, Anthropic, Gemini, Mistral) using your own API keys. This means translations are not just accurate—they are context-aware, idiomatic, and preserve the original tone.
+
+### Core Features
+
+* **🤖 Bring Your Own API:** Natively supports OpenAI (ChatGPT), Anthropic (Claude), Google (Gemini), and Mistral. You control the costs and privacy.
+* **⚡ Smart Local Fallback:** If your API key runs out or drops, LinguaPop automatically falls back to Chrome's local, built-in AI models (Nano) to ensure you never lose translation capabilities.
+* **✍️ Inline AI Writing Assistant:** Focus any text input on the web (emails, chats, comments). Click the floating LinguaPop button to rewrite your draft into fluent, native-sounding English. Choose tones like *Formal*, *Friendly*, *Shorter*, or *Grammar-only*.
+* **📄 Built-in PDF Localization:** Right-click any local or remote PDF link and select "Open in LinguaPop PDF" to render and translate documents natively.
 * **🌊 Waterfall Page Translation:** Translate entire web pages with a beautiful top-to-bottom streaming effect. The extension intelligently batches paragraphs and replaces them live as responses arrive.
-* **⚙️ Advanced Customization:**
-  * **Themes & Accent Colors:** Personalize the extension's look to match your style.
-  * **Site Exceptions:** Configure a blacklist of domains where the Writing Assistant should not appear.
-  * **Import / Export Settings:** Easily back up your API keys, preferences, and excluded sites to a JSON file and restore them anytime.
-  * **Translation History:** Keep track of your original inputs and the AI-generated rewrites.
-* **🗄️ Lightning-Fast LRU Cache:** 100% local `chrome.storage` caching mechanism. Repeated phrases load instantly (0ms) and save your API tokens.
-* **🎨 Beautiful UI/UX:** Crafted with modern web standards, featuring Dark/Light mode support, fluid animations, and a non-intrusive Shadow DOM popup system.
+* **🗄️ Lightning-Fast LRU Cache:** 100% local `chrome.storage` cache ensures that repeated phrases load instantly (0ms) and save your API tokens.
 
----
+## 🚀 Installation
 
-## 🚀 Installation Guide
+LinguaPop is easy to install via the pre-built releases or from source.
 
-You can install LinguaPop AI in two ways: by downloading a pre-built release, or by building it from the source code.
+### The Easy Way (Pre-built Release)
 
-### Option A: Install from Releases (Easiest)
+1. Download the latest `dist.zip` from the [Releases](../../releases) page.
+2. Extract the ZIP file to a folder on your computer.
+3. Open your Chromium-based browser (Chrome, Edge, Brave) and go to `chrome://extensions`.
+4. Enable **Developer mode** in the top right corner.
+5. Click **Load unpacked** and select the folder where you extracted `dist.zip`.
 
-1. Go to the [Releases](../../releases) page of this repository.
-2. Download the latest `dist.zip` file.
-3. Extract the ZIP file to a folder on your computer.
-4. Open your Chromium-based browser (Chrome, Edge, Brave, etc.) and navigate to `chrome://extensions`.
-5. Enable **Developer mode** (usually a toggle in the top right corner).
-   
-   ![Enable Developer Mode](placeholder-developer-mode.png)
-   *(Placeholder: Screenshot showing the Developer mode toggle)*
+### From Source (For Developers)
 
-6. Click **Load unpacked** and select the folder where you extracted `dist.zip`.
+Requires [Node.js](https://nodejs.org/) v18+.
 
-   ![Load Unpacked](placeholder-load-unpacked.png)
-   *(Placeholder: Screenshot showing the Load Unpacked button and folder selection)*
+```bash
+git clone https://github.com/kkonstantin08/translator.git
+cd translator
+npm install
+npm run build
+```
+Load the generated `dist` folder into `chrome://extensions` via **Load unpacked**.
 
-### Option B: Build from Source (For Developers)
+## ⚙️ Setting up your LLM
 
-If you want to modify the code or build the latest version directly from the `master` branch:
-
-**Prerequisites:**
-* [Node.js](https://nodejs.org/) (v18 or higher recommended)
-* npm or yarn
-
-**Steps:**
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/kkonstantin08/translator.git
-   cd translator
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Build the extension:
-   ```bash
-   npm run build
-   ```
-   This will generate a `dist` folder in your project directory.
-4. Load the `dist` folder into your browser:
-   * Navigate to `chrome://extensions`
-   * Enable **Developer mode**
-   * Click **Load unpacked** and select the generated `dist` directory.
-
----
-
-## ⚙️ Configuration & LLM Setup
-
-To use LinguaPop, you need to configure your preferred AI provider in the settings.
+To use LinguaPop, you must configure your preferred AI provider in the settings.
 
 1. Click on the LinguaPop extension icon in your browser toolbar to open the **Options Page**.
 2. Navigate to the **"Провайдеры ИИ" (AI Providers)** tab.
-
-   ![AI Providers Tab](placeholder-ai-providers-tab.png)
-   *(Placeholder: Screenshot of the AI Providers settings tab)*
-
-3. **Select your Active Provider:** Choose between OpenAI, Anthropic, Gemini, or Mistral.
-4. **Enter your API Key:** Paste your API key(s) for the selected provider. You can enter multiple keys (one per line) for load balancing or rate-limit circumvention. The extension securely stores these locally.
-5. **Select the Model:** Choose the specific model you want to use (e.g., `gpt-4o`, `claude-3-5-sonnet`, `gemini-1.5-pro`).
-6. **Configure Fallback (Optional but Recommended):** In the "Fallback-переводчик" section, select "Chrome Built-in AI". If your primary API fails or you run out of credits, LinguaPop will automatically use Chrome's local Nano model to continue translating without interruption!
-
----
-
-## ⌨️ How to Use
-
-* **Read:** Highlight text on any website. A tiny LinguaPop action button will appear. Click it (or press `Alt+T`) to see the translation.
-* **Write:** Focus any text input on the web (like a comment box, email client, or chat). Click the pink LinguaPop button in the corner to magically rewrite your draft into fluent English (or your selected language).
-* **Full Page Translation:** Right-click anywhere on the page and select **Перевести страницу на русский (LinguaPop)** from the context menu.
-
-### Keyboard Shortcuts
-
-| Shortcut | Action |
-| --- | --- |
-| `Alt + T` | Translate the currently selected text (or full page if nothing is selected) |
-| `Ctrl/Cmd + Shift + L` | Open the manual popup translator in the toolbar |
-| `Escape` | Close any active inline popups |
-
----
+3. Select your provider (OpenAI, Anthropic, Gemini, or Mistral) and paste your API key. Keys are stored securely in local browser storage.
+4. **Recommended:** Enable "Chrome Built-in AI" in the Fallback section to ensure offline or quota-free backup translations.
 
 ## 🔒 Privacy & Security
 
 **Your data stays yours.** 
 LinguaPop only sends the text you actively choose to translate (or the page content when explicitly requested) directly to the AI provider you configured. 
 
-* API Keys are stored locally and securely in your browser's `chrome.storage`.
-* The extension does not collect telemetry, analytics, or background tracking data.
-* The translation cache is strictly local and uses an LRU (Least Recently Used) algorithm to prevent memory bloat.
+* **Local Keys:** API Keys are stored locally and securely in your browser's `chrome.storage`.
+* **Zero Telemetry:** The extension does not collect telemetry, analytics, or background tracking data.
+* **Local Caching:** The translation cache is strictly local.
 
 ---
 
-## 🛠️ Tech Stack
-
-* **Architecture:** Chrome Extension Manifest V3
-* **Frontend:** React, TypeScript, Vite
-* **Content Injection:** Vanilla TS + Shadow DOM (to completely isolate CSS and avoid website styling conflicts)
-* **LLM Integration:** Direct API calls to multiple providers (OpenAI, Anthropic, Gemini, Mistral)
-* **Storage:** `chrome.storage.local` and `chrome.storage.sync`
+<div align="center">
+  <em>Designed for a seamless multilingual web experience.</em>
+</div>
