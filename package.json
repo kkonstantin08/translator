@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && esbuild src/content/content.ts --bundle --outfile=dist/content.js --minify && esbuild src/background/background.ts --bundle --outfile=dist/background.js --minify",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -30,6 +30,7 @@
     "@types/react-dom": "19.2.3",
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "5.1.1",
+    "esbuild": "^0.28.1",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
     "vite": "7.3.2",
